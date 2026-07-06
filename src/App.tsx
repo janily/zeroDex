@@ -20,9 +20,9 @@ import {
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useWallet, type WalletStatus } from "./hooks/useWallet";
 
 type Page = "swap" | "pools" | "positions" | "activity";
-type NetworkState = "disconnected" | "wrong" | "ready";
 type TxStage = "idle" | "approve" | "sign" | "confirm" | "success" | "error";
 type PositionStatus = "Active" | "Collectable" | "Closed";
 
@@ -150,7 +150,6 @@ const tokens = ["MNTA", "MNTB", "MNTC", "MNTD"];
 
 export function App() {
   const [page, setPage] = useState<Page>("pools");
-  const [network, setNetwork] = useState<NetworkState>("disconnected");
   const [query, setQuery] = useState("");
   const [fee, setFee] = useState("All fees");
   const [hideEmpty, setHideEmpty] = useState(true);
@@ -162,6 +161,7 @@ export function App() {
   const [swapMode, setSwapMode] = useState<"input" | "output">("input");
   const [swapIn, setSwapIn] = useState("250");
   const [swapOut, setSwapOut] = useState("319.42");
+  const wallet = useWallet();
 
   const filteredPools = useMemo(() => {
     return pools.filter((pool) => {
@@ -173,17 +173,10 @@ export function App() {
   }, [fee, hideEmpty, query]);
 
   const selectedPool = pools.find((pool) => pool.index === selectedPoolIndex) ?? pools[0];
-  const isReady = network === "ready";
+  const isReady = wallet.status === "connected";
 
   function runTransaction(kind: "approve" | "swap" | "mint" | "collect" | "create") {
-    if (network === "disconnected") {
-      setNetwork("wrong");
-      return;
-    }
-    if (network === "wrong") {
-      setNetwork("ready");
-      return;
-    }
+    if (!isReady) return;
     setTxStage(kind === "approve" ? "approve" : "sign");
     window.setTimeout(() => setTxStage("confirm"), 800);
     window.setTimeout(() => setTxStage("success"), 1800);
@@ -193,7 +186,13 @@ export function App() {
     <main className="shell">
       <Sidebar page={page} setPage={setPage} />
       <section className="workspace">
-        <Topbar network={network} setNetwork={setNetwork} />
+        <Topbar
+          account={wallet.account}
+          status={wallet.status}
+          error={wallet.error}
+          connect={wallet.connect}
+          switchToSepolia={wallet.switchToSepolia}
+        />
         {page === "pools" && (
           <PoolsPage
             query={query}
@@ -295,31 +294,51 @@ function Sidebar({ page, setPage }: { page: Page; setPage: (page: Page) => void 
 }
 
 function Topbar({
-  network,
-  setNetwork,
+  account,
+  status,
+  error,
+  connect,
+  switchToSepolia,
 }: {
-  network: NetworkState;
-  setNetwork: (state: NetworkState) => void;
+  account?: string;
+  status: WalletStatus;
+  error?: string;
+  connect: () => Promise<void>;
+  switchToSepolia: () => Promise<void>;
 }) {
-  const label =
-    network === "ready" ? "0x71c2...4B19" : network === "wrong" ? "Switch to Sepolia" : "Connect wallet";
+  const label = getWalletLabel(status, account);
+  const action = status === "wrong-network" ? switchToSepolia : connect;
   return (
     <header className="topbar">
       <div>
         <p className="eyebrow">MetaNodeSwap front end</p>
         <h1>Liquidity control console</h1>
+        {error && <p className="topbar-error">{error}</p>}
       </div>
       <div className="topbar-actions">
         <button className="icon-button" title="Refresh chain data">
           <RefreshCw size={16} />
         </button>
-        <button className={`wallet-button ${network}`} onClick={() => setNetwork(network === "ready" ? "disconnected" : "ready")}>
+        <button className={`wallet-button ${walletClass(status)}`} onClick={() => void action()}>
           <Wallet size={16} />
           {label}
         </button>
       </div>
     </header>
   );
+}
+
+function getWalletLabel(status: WalletStatus, account?: string) {
+  if (status === "missing") return "Install MetaMask";
+  if (status === "wrong-network") return "Switch to Sepolia";
+  if (status === "connected" && account) return `${account.slice(0, 6)}...${account.slice(-4)}`;
+  return "Connect wallet";
+}
+
+function walletClass(status: WalletStatus) {
+  if (status === "connected") return "ready";
+  if (status === "wrong-network" || status === "error") return "wrong";
+  return "disconnected";
 }
 
 function PoolsPage(props: {

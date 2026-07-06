@@ -170,6 +170,12 @@ code,
   letter-spacing: 0;
 }
 
+.topbar-error {
+  margin-top: 6px;
+  color: #e8c38b;
+  font-size: 12px;
+}
+
 h1,
 h2,
 h3,
