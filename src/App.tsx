@@ -22,12 +22,16 @@ import {
 import { useMemo, useState } from "react";
 import { TOKENS } from "./config/tokens";
 import { useDexData } from "./hooks/useDexData";
+import { usePositions } from "./hooks/usePositions";
+import { useTransactions } from "./hooks/useTransactions";
 import { useWallet, type WalletStatus } from "./hooks/useWallet";
+import { getWriteContracts } from "./lib/contracts";
+import { buildCreatePoolParams } from "./lib/createPool";
+import { parseTokenAmount } from "./lib/amount";
 import { feeToPercent } from "./lib/price";
-import type { DisplayPool } from "./types/domain";
+import type { DisplayPool, TransactionStage } from "./types/domain";
 
 type Page = "swap" | "pools" | "positions" | "activity";
-type TxStage = "idle" | "approve" | "sign" | "confirm" | "success" | "error";
 type PositionStatus = "Active" | "Collectable" | "Closed";
 
 type Pool = {
@@ -159,16 +163,20 @@ export function App() {
   const [hideEmpty, setHideEmpty] = useState(true);
   const [selectedPoolIndex, setSelectedPoolIndex] = useState(0);
   const [drawer, setDrawer] = useState<"create" | "liquidity" | "swap" | null>(null);
-  const [txStage, setTxStage] = useState<TxStage>("idle");
   const [zanFailed, setZanFailed] = useState(false);
   const [manualPosition, setManualPosition] = useState("");
+  const [manualQueriedPosition, setManualQueriedPosition] = useState<{ id: string; raw: unknown } | undefined>();
   const [swapMode, setSwapMode] = useState<"input" | "output">("input");
   const [swapIn, setSwapIn] = useState("250");
   const [swapOut, setSwapOut] = useState("319.42");
   const wallet = useWallet();
   const isReady = wallet.status === "connected";
+  const transactions = useTransactions();
   const dexData = useDexData(wallet.account, isReady);
+  const positionData = usePositions(wallet.account, isReady);
   const activePools = dexData.pools.length > 0 ? dexData.pools.map(displayPoolToUiPool) : pools;
+  const chainPositions = [...positionData.positions, ...(manualQueriedPosition ? [manualQueriedPosition] : [])];
+  const activePositions = chainPositions.length > 0 ? chainPositions.map(positionDetailsToUiPosition) : positions;
 
   const filteredPools = useMemo(() => {
     return activePools.filter((pool) => {
@@ -180,12 +188,58 @@ export function App() {
   }, [activePools, fee, hideEmpty, query]);
 
   const selectedPool = activePools.find((pool) => pool.index === selectedPoolIndex) ?? activePools[0] ?? pools[0];
+  const selectedDisplayPool = dexData.pools.find((pool) => pool.index === selectedPool.index);
 
-  function runTransaction(kind: "approve" | "swap" | "mint" | "collect" | "create") {
-    if (!isReady) return;
-    setTxStage(kind === "approve" ? "approve" : "sign");
-    window.setTimeout(() => setTxStage("confirm"), 800);
-    window.setTimeout(() => setTxStage("success"), 1800);
+  async function runTransaction(kind: "approve" | "swap" | "mint" | "collect" | "burn" | "create", payload?: TransactionPayload) {
+    if (!isReady || !wallet.account || !window.ethereum) return;
+    if (kind === "approve") return;
+
+    await transactions.runWrite(async () => {
+      const contracts = await getWriteContracts(window.ethereum!);
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 20 * 60);
+
+      if (kind === "create" && payload?.type === "create") {
+        return contracts.poolManager.createAndInitializePoolIfNecessary(buildCreatePoolParams(payload));
+      }
+
+      if (kind === "mint" && selectedDisplayPool && payload?.type === "liquidity") {
+        return contracts.positionManager.mint({
+          token0: selectedDisplayPool.token0.address,
+          token1: selectedDisplayPool.token1.address,
+          index: BigInt(selectedDisplayPool.index),
+          amount0Desired: parseTokenAmount(payload.amount0, selectedDisplayPool.token0.decimals),
+          amount1Desired: parseTokenAmount(payload.amount1, selectedDisplayPool.token1.decimals),
+          recipient: wallet.account,
+          deadline,
+        });
+      }
+
+      if (kind === "swap" && selectedDisplayPool && payload?.type === "swap") {
+        return contracts.swapRouter.exactInput({
+          tokenIn: selectedDisplayPool.token0.address,
+          tokenOut: selectedDisplayPool.token1.address,
+          indexPath: [BigInt(selectedDisplayPool.index)],
+          recipient: wallet.account,
+          deadline,
+          amountIn: parseTokenAmount(payload.amountIn, selectedDisplayPool.token0.decimals),
+          amountOutMinimum: 0n,
+          sqrtPriceLimitX96: 0n,
+        });
+      }
+
+      if (kind === "collect" && payload?.type === "position") {
+        return contracts.positionManager.collect(BigInt(payload.positionId), wallet.account);
+      }
+
+      if (kind === "burn" && payload?.type === "position") {
+        return contracts.positionManager.burn(BigInt(payload.positionId));
+      }
+
+      throw new Error("Load Sepolia pool data before submitting this transaction");
+    });
+    if (transactions.stage === "success") {
+      await dexData.refresh();
+    }
   }
 
   return (
@@ -240,17 +294,27 @@ export function App() {
             runTransaction={runTransaction}
             openDrawer={setDrawer}
             isReady={isReady}
+            positions={activePositions}
+            positionsLoading={positionData.loading}
+            positionsError={positionData.error}
+            queryManualPosition={async (positionId) => {
+              const next = await positionData.fetchManualPosition(positionId);
+              setManualQueriedPosition(next);
+              setManualPosition(next.id);
+            }}
           />
         )}
-        {page === "activity" && <ActivityPage txStage={txStage} />}
+        {page === "activity" && <ActivityPage txStage={transactions.stage} />}
       </section>
-      <ContextPanel selectedPool={selectedPool} txStage={txStage} openDrawer={setDrawer} />
+      <ContextPanel selectedPool={selectedPool} txStage={transactions.stage} openDrawer={setDrawer} />
       {drawer && (
         <Drawer
           type={drawer}
           onClose={() => setDrawer(null)}
           selectedPool={selectedPool}
-          txStage={txStage}
+          selectedDisplayPool={selectedDisplayPool}
+          txStage={transactions.stage}
+          txError={transactions.error}
           runTransaction={runTransaction}
           isReady={isReady}
         />
@@ -361,7 +425,7 @@ function PoolsPage(props: {
   selectedPool: Pool;
   setSelectedPoolIndex: (index: number) => void;
   openDrawer: (drawer: "create" | "liquidity" | "swap") => void;
-  runTransaction: (kind: "approve" | "swap" | "mint" | "collect" | "create") => void;
+  runTransaction: (kind: "approve" | "swap" | "mint" | "collect" | "burn" | "create") => Promise<void>;
   isReady: boolean;
   chainLoading: boolean;
   chainError?: string;
@@ -477,7 +541,7 @@ function PoolDetail({
 }: {
   pool: Pool;
   openDrawer: (drawer: "create" | "liquidity" | "swap") => void;
-  runTransaction: (kind: "approve" | "swap" | "mint" | "collect" | "create") => void;
+  runTransaction: (kind: "approve" | "swap" | "mint" | "collect" | "burn" | "create") => Promise<void>;
   isReady: boolean;
 }) {
   return (
@@ -591,9 +655,13 @@ function PositionsPage(props: {
   setZanFailed: (failed: boolean) => void;
   manualPosition: string;
   setManualPosition: (position: string) => void;
-  runTransaction: (kind: "approve" | "swap" | "mint" | "collect" | "create") => void;
+  runTransaction: (kind: "approve" | "swap" | "mint" | "collect" | "burn" | "create", payload?: TransactionPayload) => Promise<void>;
   openDrawer: (drawer: "create" | "liquidity" | "swap") => void;
   isReady: boolean;
+  positions: Position[];
+  positionsLoading: boolean;
+  positionsError?: string;
+  queryManualPosition: (positionId: string) => Promise<void>;
 }) {
   return (
     <section className="main-column full">
@@ -611,6 +679,15 @@ function PositionsPage(props: {
           </button>
         </div>
       </div>
+      {(props.positionsLoading || props.positionsError) && (
+        <div className={props.positionsError ? "inline-error compact-error" : "chain-banner"}>
+          {props.positionsError ? <X size={16} /> : <Loader2 size={16} />}
+          <div>
+            <strong>{props.positionsError ? "Position lookup unavailable" : "Loading LP positions"}</strong>
+            <span>{props.positionsError ?? "Reading ZAN NFT IDs and PositionManager.getPositionInfo."}</span>
+          </div>
+        </div>
+      )}
       {props.zanFailed && (
         <div className="inline-error">
           <X size={16} />
@@ -619,11 +696,13 @@ function PositionsPage(props: {
             <span>Enter a positionId to call getPositionInfo directly.</span>
           </div>
           <input value={props.manualPosition} onChange={(event) => props.setManualPosition(event.target.value)} placeholder="positionId" />
-          <button className="secondary-button">Query</button>
+          <button className="secondary-button" onClick={() => void props.queryManualPosition(props.manualPosition)}>
+            Query
+          </button>
         </div>
       )}
       <div className="position-grid">
-        {positions.map((position) => (
+        {props.positions.map((position) => (
           <article className="position-row" key={position.id}>
             <div>
               <span className="label">{position.id}</span>
@@ -634,8 +713,17 @@ function PositionsPage(props: {
             <Metric label="Liquidity" value={position.liquidity} />
             <Metric label="Owed" value={`${position.owed0} / ${position.owed1}`} />
             <span className={`position-status ${position.status.toLowerCase()}`}>{position.status}</span>
-            <button className="secondary-button" onClick={() => props.runTransaction(position.status === "Collectable" ? "collect" : "mint")}>
-              {position.status === "Collectable" ? "Collect" : position.status === "Closed" ? "Review" : "Manage"}
+            <button
+              className="secondary-button"
+              disabled={!props.isReady}
+              onClick={() =>
+                void props.runTransaction(position.status === "Collectable" ? "collect" : "burn", {
+                  type: "position",
+                  positionId: position.id.replace("#", ""),
+                })
+              }
+            >
+              {position.status === "Collectable" ? "Collect" : position.status === "Closed" ? "Review" : "Burn"}
             </button>
           </article>
         ))}
@@ -644,7 +732,7 @@ function PositionsPage(props: {
   );
 }
 
-function ActivityPage({ txStage }: { txStage: TxStage }) {
+function ActivityPage({ txStage }: { txStage: TransactionStage }) {
   const events = [
     ["Quote refreshed", "quoteExactInput static call returned 319.42 MNTB"],
     ["Allowance checked", "MNTA allowance covers SwapRouter amountIn"],
@@ -683,7 +771,7 @@ function ContextPanel({
   openDrawer,
 }: {
   selectedPool: Pool;
-  txStage: TxStage;
+  txStage: TransactionStage;
   openDrawer: (drawer: "create" | "liquidity" | "swap") => void;
 }) {
   return (
@@ -713,19 +801,43 @@ function Drawer({
   type,
   onClose,
   selectedPool,
+  selectedDisplayPool,
   txStage,
+  txError,
   runTransaction,
   isReady,
 }: {
   type: "create" | "liquidity" | "swap";
   onClose: () => void;
   selectedPool: Pool;
-  txStage: TxStage;
-  runTransaction: (kind: "approve" | "swap" | "mint" | "collect" | "create") => void;
+  selectedDisplayPool?: DisplayPool;
+  txStage: TransactionStage;
+  txError?: string;
+  runTransaction: (kind: "approve" | "swap" | "mint" | "collect" | "burn" | "create", payload?: TransactionPayload) => Promise<void>;
   isReady: boolean;
 }) {
+  const [createForm, setCreateForm] = useState<CreateDrawerState>({
+    type: "create",
+    tokenA: TOKENS[0].address,
+    tokenB: TOKENS[1].address,
+    feePercent: "0.30%",
+    initialRate: "1.2",
+    minRate: "1.0",
+    maxRate: "1.5",
+  });
+  const [liquidityForm, setLiquidityForm] = useState<LiquidityDrawerState>({
+    type: "liquidity",
+    amount0: "140",
+    amount1: "179.84",
+  });
+  const [swapForm, setSwapForm] = useState<SwapDrawerState>({
+    type: "swap",
+    amountIn: "250",
+  });
   const title = type === "create" ? "Create pool" : type === "liquidity" ? "Add liquidity" : "Swap through pool";
   const action = type === "create" ? "create" : type === "liquidity" ? "mint" : "swap";
+  const payload = type === "create" ? createForm : type === "liquidity" ? liquidityForm : swapForm;
+  const canSubmit = isReady && (type === "create" || Boolean(selectedDisplayPool));
   return (
     <div className="drawer-backdrop">
       <aside className="drawer">
@@ -738,9 +850,33 @@ function Drawer({
             <X size={16} />
           </button>
         </header>
-        {type === "create" ? <CreatePoolForm /> : type === "liquidity" ? <LiquidityForm selectedPool={selectedPool} /> : <SwapDrawerForm selectedPool={selectedPool} />}
+        {type === "create" ? (
+          <CreatePoolForm value={createForm} onChange={setCreateForm} />
+        ) : type === "liquidity" ? (
+          <LiquidityForm selectedPool={selectedPool} value={liquidityForm} onChange={setLiquidityForm} />
+        ) : (
+          <SwapDrawerForm selectedPool={selectedPool} value={swapForm} onChange={setSwapForm} />
+        )}
+        {!selectedDisplayPool && type !== "create" && (
+          <div className="inline-error compact-error">
+            <X size={16} />
+            <div>
+              <strong>Chain pool required</strong>
+              <span>Connect Sepolia and refresh pools before submitting this write.</span>
+            </div>
+          </div>
+        )}
+        {txError && (
+          <div className="inline-error compact-error">
+            <X size={16} />
+            <div>
+              <strong>Transaction failed</strong>
+              <span>{txError}</span>
+            </div>
+          </div>
+        )}
         <TxTimeline stage={txStage} />
-        <button className="primary-button wide" onClick={() => runTransaction(action)}>
+        <button className="primary-button wide" disabled={!canSubmit} onClick={() => void runTransaction(action, payload)}>
           {isReady ? primaryLabel(type, txStage) : "Connect wallet"}
         </button>
       </aside>
@@ -748,62 +884,116 @@ function Drawer({
   );
 }
 
-function CreatePoolForm() {
+type CreateDrawerState = {
+  type: "create";
+  tokenA: (typeof TOKENS)[number]["address"];
+  tokenB: (typeof TOKENS)[number]["address"];
+  feePercent: string;
+  initialRate: string;
+  minRate: string;
+  maxRate: string;
+};
+
+type LiquidityDrawerState = {
+  type: "liquidity";
+  amount0: string;
+  amount1: string;
+};
+
+type SwapDrawerState = {
+  type: "swap";
+  amountIn: string;
+};
+
+type DrawerSubmitPayload = CreateDrawerState | LiquidityDrawerState | SwapDrawerState;
+type PositionSubmitPayload = {
+  type: "position";
+  positionId: string;
+};
+type TransactionPayload = DrawerSubmitPayload | PositionSubmitPayload;
+
+function CreatePoolForm({ value, onChange }: { value: CreateDrawerState; onChange: (value: CreateDrawerState) => void }) {
   return (
     <div className="form-stack">
-      <TokenSelect label="Token 0" value="MNTA" />
-      <TokenSelect label="Token 1" value="MNTD" />
-      <InputBlock label="Fee tier" value="0.30%" helper="Sorted token order is handled before contract call." />
-      <InputBlock label="Initial rate" value="1 MNTA = 2.1200 MNTD" />
-      <InputBlock label="Minimum rate" value="1.8000" />
-      <InputBlock label="Maximum rate" value="2.7000" />
+      <TokenSelect label="Token 0" value={value.tokenA} onChange={(tokenA) => onChange({ ...value, tokenA })} />
+      <TokenSelect label="Token 1" value={value.tokenB} onChange={(tokenB) => onChange({ ...value, tokenB })} />
+      <InputBlock label="Fee tier" value={value.feePercent} onChange={(feePercent) => onChange({ ...value, feePercent })} helper="Sorted token order is handled before contract call." />
+      <InputBlock label="Initial rate" value={value.initialRate} onChange={(initialRate) => onChange({ ...value, initialRate })} />
+      <InputBlock label="Minimum rate" value={value.minRate} onChange={(minRate) => onChange({ ...value, minRate })} />
+      <InputBlock label="Maximum rate" value={value.maxRate} onChange={(maxRate) => onChange({ ...value, maxRate })} />
     </div>
   );
 }
 
-function LiquidityForm({ selectedPool }: { selectedPool: Pool }) {
+function LiquidityForm({
+  selectedPool,
+  value,
+  onChange,
+}: {
+  selectedPool: Pool;
+  value: LiquidityDrawerState;
+  onChange: (value: LiquidityDrawerState) => void;
+}) {
   return (
     <div className="form-stack">
       <InputBlock label="Pool" value={`${selectedPool.pair} #${selectedPool.index}`} helper={`Fixed range ${selectedPool.range}`} />
-      <TokenAmount label={`${selectedPool.token0} amount`} token={selectedPool.token0} value="140.00" onChange={() => undefined} />
-      <TokenAmount label={`${selectedPool.token1} amount`} token={selectedPool.token1} value="179.84" onChange={() => undefined} />
+      <TokenAmount label={`${selectedPool.token0} amount`} token={selectedPool.token0} value={value.amount0} onChange={(amount0) => onChange({ ...value, amount0 })} />
+      <TokenAmount label={`${selectedPool.token1} amount`} token={selectedPool.token1} value={value.amount1} onChange={(amount1) => onChange({ ...value, amount1 })} />
       <div className="quote-box">
-        <Metric label="Estimated use" value={`138.21 ${selectedPool.token0} / 177.40 ${selectedPool.token1}`} />
+        <Metric label="Desired amounts" value={`${value.amount0} ${selectedPool.token0} / ${value.amount1} ${selectedPool.token1}`} />
         <Metric label="Approve target" value="PositionManager" />
       </div>
     </div>
   );
 }
 
-function SwapDrawerForm({ selectedPool }: { selectedPool: Pool }) {
+function SwapDrawerForm({
+  selectedPool,
+  value,
+  onChange,
+}: {
+  selectedPool: Pool;
+  value: SwapDrawerState;
+  onChange: (value: SwapDrawerState) => void;
+}) {
   return (
     <div className="form-stack">
       <InputBlock label="Route" value={`${selectedPool.pair} #${selectedPool.index}`} helper="Only same-pair multi-pool routing is included." />
-      <TokenAmount label="Pay" token={selectedPool.token0} value="250.00" onChange={() => undefined} />
-      <TokenAmount label="Receive" token={selectedPool.token1} value="319.42" onChange={() => undefined} />
+      <TokenAmount label="Pay" token={selectedPool.token0} value={value.amountIn} onChange={(amountIn) => onChange({ ...value, amountIn })} />
+      <InputBlock label="Receive" value="Quoted on submit" />
       <InputBlock label="Slippage" value="0.50%" />
     </div>
   );
 }
 
-function TokenSelect({ label, value }: { label: string; value: string }) {
+function TokenSelect({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: (typeof TOKENS)[number]["address"];
+  onChange: (value: (typeof TOKENS)[number]["address"]) => void;
+}) {
   return (
     <label className="field">
       <span>{label}</span>
-      <select defaultValue={value}>
+      <select value={value} onChange={(event) => onChange(event.target.value as (typeof TOKENS)[number]["address"])}>
         {tokens.map((token) => (
-          <option key={token}>{token}</option>
+          <option key={token} value={TOKENS.find((item) => item.symbol === token)?.address}>
+            {token}
+          </option>
         ))}
       </select>
     </label>
   );
 }
 
-function InputBlock({ label, value, helper }: { label: string; value: string; helper?: string }) {
+function InputBlock({ label, value, helper, onChange }: { label: string; value: string; helper?: string; onChange?: (value: string) => void }) {
   return (
     <label className="field">
       <span>{label}</span>
-      <input defaultValue={value} />
+      <input value={value} onChange={(event) => onChange?.(event.target.value)} readOnly={!onChange} />
       {helper && <small>{helper}</small>}
     </label>
   );
@@ -832,14 +1022,14 @@ function TokenAmount({
   );
 }
 
-function TxTimeline({ stage, compact = false }: { stage: TxStage; compact?: boolean }) {
+function TxTimeline({ stage, compact = false }: { stage: TransactionStage; compact?: boolean }) {
   const steps = [
-    ["approve", "Approve"],
-    ["sign", "Sign"],
-    ["confirm", "Confirm"],
+    ["waiting-signature", "Sign"],
+    ["submitted", "Submit"],
+    ["confirming", "Confirm"],
     ["success", "Complete"],
   ] as const;
-  const order = ["idle", "approve", "sign", "confirm", "success", "error"];
+  const order = ["idle", "waiting-signature", "submitted", "confirming", "success", "rejected", "error"];
   const activeIndex = Math.max(0, order.indexOf(stage));
 
   return (
@@ -871,10 +1061,10 @@ function StatusPill({ status }: { status: Pool["status"] }) {
   return <span className={`status-pill ${status.toLowerCase().replace(" ", "-")}`}>{status}</span>;
 }
 
-function primaryLabel(type: "create" | "liquidity" | "swap", stage: TxStage) {
-  if (stage === "approve") return "Approving";
-  if (stage === "sign") return "Waiting for signature";
-  if (stage === "confirm") return "Confirming";
+function primaryLabel(type: "create" | "liquidity" | "swap", stage: TransactionStage) {
+  if (stage === "waiting-signature") return "Waiting for signature";
+  if (stage === "submitted") return "Submitted";
+  if (stage === "confirming") return "Confirming";
   if (stage === "success") return "Submitted";
   if (type === "create") return "Create pool";
   if (type === "liquidity") return "Approve and mint";
@@ -898,5 +1088,23 @@ function displayPoolToUiPool(pool: DisplayPool): Pool {
     liquidity: Number(pool.liquidity > BigInt(Number.MAX_SAFE_INTEGER) ? BigInt(Number.MAX_SAFE_INTEGER) : pool.liquidity),
     status: pool.status,
     volume: "chain",
+  };
+}
+
+function positionDetailsToUiPosition(position: { id: string; raw: unknown }): Position {
+  const raw = position.raw as Record<string, unknown>;
+  const liquidity = BigInt((raw.liquidity as bigint | string | number | undefined) ?? 0);
+  const owed0 = BigInt((raw.tokensOwed0 as bigint | string | number | undefined) ?? 0);
+  const owed1 = BigInt((raw.tokensOwed1 as bigint | string | number | undefined) ?? 0);
+  const status: PositionStatus = owed0 > 0n || owed1 > 0n ? "Collectable" : liquidity > 0n ? "Active" : "Closed";
+  return {
+    id: `#${position.id}`,
+    pair: "PositionManager NFT",
+    poolIndex: Number((raw.index as bigint | string | number | undefined) ?? 0),
+    range: `${String(raw.tickLower ?? "-")} - ${String(raw.tickUpper ?? "-")}`,
+    liquidity: liquidity.toString(),
+    owed0: owed0.toString(),
+    owed1: owed1.toString(),
+    status,
   };
 }
