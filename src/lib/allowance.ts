@@ -38,3 +38,16 @@ export function findMissingAllowances(
 ): AllowanceCheck[] {
   return checks.filter((check) => allowanceOf(check.token, check.spender) < check.required);
 }
+
+export async function resolveMissingAllowances(
+  checks: AllowanceCheck[],
+  allowanceOf: (token: Address, spender: Address) => Promise<bigint>,
+): Promise<AllowanceCheck[]> {
+  const resolved = await Promise.all(
+    checks.map(async (check) => ({
+      check,
+      allowance: await allowanceOf(check.token, check.spender),
+    })),
+  );
+  return resolved.filter((item) => item.allowance < item.check.required).map((item) => item.check);
+}

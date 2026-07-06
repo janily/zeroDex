@@ -22,6 +22,7 @@ import {
 import { useMemo, useState } from "react";
 import { TOKENS } from "./config/tokens";
 import { useDexData } from "./hooks/useDexData";
+import { useAllowances } from "./hooks/useAllowances";
 import { usePositions } from "./hooks/usePositions";
 import { useSwapQuote } from "./hooks/useSwapQuote";
 import { useTransactions } from "./hooks/useTransactions";
@@ -29,8 +30,9 @@ import { useWallet, type WalletStatus } from "./hooks/useWallet";
 import { getWriteContracts } from "./lib/contracts";
 import { buildCreatePoolParams } from "./lib/createPool";
 import { parseTokenAmount } from "./lib/amount";
+import { getMintAllowancePlan, getSwapAllowancePlan } from "./lib/allowance";
 import { feeToPercent } from "./lib/price";
-import type { DisplayPool, TransactionStage } from "./types/domain";
+import type { Address, DisplayPool, TransactionStage } from "./types/domain";
 
 type Page = "swap" | "pools" | "positions" | "activity";
 type PositionStatus = "Active" | "Collectable" | "Closed";
@@ -210,52 +212,55 @@ export function App() {
     if (!isReady || !wallet.account || !window.ethereum) return;
     if (kind === "approve") return;
 
-    await transactions.runWrite(async () => {
-      const contracts = await getWriteContracts(window.ethereum!);
-      const deadline = BigInt(Math.floor(Date.now() / 1000) + 20 * 60);
+    await transactions.runWrite(
+      async () => {
+        const contracts = await getWriteContracts(window.ethereum!);
+        const deadline = BigInt(Math.floor(Date.now() / 1000) + 20 * 60);
 
-      if (kind === "create" && payload?.type === "create") {
-        return contracts.poolManager.createAndInitializePoolIfNecessary(buildCreatePoolParams(payload));
-      }
+        if (kind === "create" && payload?.type === "create") {
+          return contracts.poolManager.createAndInitializePoolIfNecessary(buildCreatePoolParams(payload));
+        }
 
-      if (kind === "mint" && selectedDisplayPool && payload?.type === "liquidity") {
-        return contracts.positionManager.mint({
-          token0: selectedDisplayPool.token0.address,
-          token1: selectedDisplayPool.token1.address,
-          index: BigInt(selectedDisplayPool.index),
-          amount0Desired: parseTokenAmount(payload.amount0, selectedDisplayPool.token0.decimals),
-          amount1Desired: parseTokenAmount(payload.amount1, selectedDisplayPool.token1.decimals),
-          recipient: wallet.account,
-          deadline,
-        });
-      }
+        if (kind === "mint" && selectedDisplayPool && payload?.type === "liquidity") {
+          return contracts.positionManager.mint({
+            token0: selectedDisplayPool.token0.address,
+            token1: selectedDisplayPool.token1.address,
+            index: BigInt(selectedDisplayPool.index),
+            amount0Desired: parseTokenAmount(payload.amount0, selectedDisplayPool.token0.decimals),
+            amount1Desired: parseTokenAmount(payload.amount1, selectedDisplayPool.token1.decimals),
+            recipient: wallet.account,
+            deadline,
+          });
+        }
 
-      if (kind === "swap" && selectedDisplayPool && payload?.type === "swap") {
-        return contracts.swapRouter.exactInput({
-          tokenIn: selectedDisplayPool.token0.address,
-          tokenOut: selectedDisplayPool.token1.address,
-          indexPath: [BigInt(selectedDisplayPool.index)],
-          recipient: wallet.account,
-          deadline,
-          amountIn: parseTokenAmount(payload.amountIn, selectedDisplayPool.token0.decimals),
-          amountOutMinimum: 0n,
-          sqrtPriceLimitX96: 0n,
-        });
-      }
+        if (kind === "swap" && selectedDisplayPool && payload?.type === "swap") {
+          return contracts.swapRouter.exactInput({
+            tokenIn: selectedDisplayPool.token0.address,
+            tokenOut: selectedDisplayPool.token1.address,
+            indexPath: [BigInt(selectedDisplayPool.index)],
+            recipient: wallet.account,
+            deadline,
+            amountIn: parseTokenAmount(payload.amountIn, selectedDisplayPool.token0.decimals),
+            amountOutMinimum: 0n,
+            sqrtPriceLimitX96: 0n,
+          });
+        }
 
-      if (kind === "collect" && payload?.type === "position") {
-        return contracts.positionManager.collect(BigInt(payload.positionId), wallet.account);
-      }
+        if (kind === "collect" && payload?.type === "position") {
+          return contracts.positionManager.collect(BigInt(payload.positionId), wallet.account);
+        }
 
-      if (kind === "burn" && payload?.type === "position") {
-        return contracts.positionManager.burn(BigInt(payload.positionId));
-      }
+        if (kind === "burn" && payload?.type === "position") {
+          return contracts.positionManager.burn(BigInt(payload.positionId));
+        }
 
-      throw new Error("Load Sepolia pool data before submitting this transaction");
-    });
-    if (transactions.stage === "success") {
-      await dexData.refresh();
-    }
+        throw new Error("Load Sepolia pool data before submitting this transaction");
+      },
+      async () => {
+        await dexData.refresh();
+        await positionData.refresh();
+      },
+    );
   }
 
   return (
@@ -336,6 +341,8 @@ export function App() {
           selectedDisplayPool={selectedDisplayPool}
           txStage={transactions.stage}
           txError={transactions.error}
+          approveToken={transactions.approveToken}
+          walletAccount={wallet.account}
           runTransaction={runTransaction}
           isReady={isReady}
         />
@@ -843,6 +850,8 @@ function Drawer({
   selectedDisplayPool,
   txStage,
   txError,
+  approveToken,
+  walletAccount,
   runTransaction,
   isReady,
 }: {
@@ -852,6 +861,8 @@ function Drawer({
   selectedDisplayPool?: DisplayPool;
   txStage: TransactionStage;
   txError?: string;
+  approveToken: (token: Address, spender: Address, amount: bigint) => Promise<void>;
+  walletAccount?: `0x${string}`;
   runTransaction: (kind: "approve" | "swap" | "mint" | "collect" | "burn" | "create", payload?: TransactionPayload) => Promise<void>;
   isReady: boolean;
 }) {
@@ -876,7 +887,41 @@ function Drawer({
   const title = type === "create" ? "Create pool" : type === "liquidity" ? "Add liquidity" : "Swap through pool";
   const action = type === "create" ? "create" : type === "liquidity" ? "mint" : "swap";
   const payload = type === "create" ? createForm : type === "liquidity" ? liquidityForm : swapForm;
+  const allowanceChecks = useMemo(() => {
+    if (!selectedDisplayPool) return [];
+    try {
+      if (type === "liquidity") {
+        return getMintAllowancePlan({
+          token0: selectedDisplayPool.token0.address,
+          token1: selectedDisplayPool.token1.address,
+          amount0Desired: parseTokenAmount(liquidityForm.amount0, selectedDisplayPool.token0.decimals),
+          amount1Desired: parseTokenAmount(liquidityForm.amount1, selectedDisplayPool.token1.decimals),
+        });
+      }
+      if (type === "swap") {
+        const amountIn = parseTokenAmount(swapForm.amountIn, selectedDisplayPool.token0.decimals);
+        return [
+          getSwapAllowancePlan({
+            tokenIn: selectedDisplayPool.token0.address,
+            mode: "exact-input",
+            amountIn,
+            amountInMaximum: amountIn,
+          }),
+        ];
+      }
+    } catch {
+      return [];
+    }
+    return [];
+  }, [liquidityForm.amount0, liquidityForm.amount1, selectedDisplayPool, swapForm.amountIn, type]);
+  const allowances = useAllowances(walletAccount, allowanceChecks, isReady && type !== "create");
   const canSubmit = isReady && (type === "create" || Boolean(selectedDisplayPool));
+  const nextAllowance = allowances.next;
+  const primaryText = !isReady
+    ? "Connect wallet"
+    : nextAllowance
+      ? `Approve ${tokenSymbol(nextAllowance.token)}`
+      : primaryLabel(type, txStage);
   return (
     <div className="drawer-backdrop">
       <aside className="drawer">
@@ -914,9 +959,33 @@ function Drawer({
             </div>
           </div>
         )}
+        {(allowances.loading || allowances.error || nextAllowance) && (
+          <div className={allowances.error ? "inline-error compact-error" : "chain-banner"}>
+            {allowances.error ? <X size={16} /> : allowances.loading ? <Loader2 size={16} /> : <ShieldCheck size={16} />}
+            <div>
+              <strong>{allowances.error ? "Allowance check failed" : allowances.loading ? "Checking allowances" : "Approval required"}</strong>
+              <span>
+                {allowances.error ??
+                  (nextAllowance
+                    ? `${tokenSymbol(nextAllowance.token)} needs approval for ${shortAddress(nextAllowance.spender)}`
+                    : "Reading ERC20 allowance.")}
+              </span>
+            </div>
+          </div>
+        )}
         <TxTimeline stage={txStage} />
-        <button className="primary-button wide" disabled={!canSubmit} onClick={() => void runTransaction(action, payload)}>
-          {isReady ? primaryLabel(type, txStage) : "Connect wallet"}
+        <button
+          className="primary-button wide"
+          disabled={!canSubmit || allowances.loading}
+          onClick={() => {
+            if (nextAllowance) {
+              void approveToken(nextAllowance.token, nextAllowance.spender, nextAllowance.required).then(() => allowances.refresh());
+              return;
+            }
+            void runTransaction(action, payload);
+          }}
+        >
+          {primaryText}
         </button>
       </aside>
     </div>
@@ -1132,6 +1201,10 @@ function displayPoolToUiPool(pool: DisplayPool): Pool {
 
 function tokenSymbol(address: string) {
   return TOKENS.find((token) => token.address.toLowerCase() === address.toLowerCase())?.symbol ?? "Token";
+}
+
+function shortAddress(address: string) {
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
 function safeParseSwapAmount(value: string, tokenAddress: string) {

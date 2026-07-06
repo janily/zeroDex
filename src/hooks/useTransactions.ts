@@ -43,13 +43,14 @@ export function useTransactions() {
     }
   }, []);
 
-  const runWrite = useCallback(async (write: () => Promise<{ hash: string; wait(): Promise<unknown> }>) => {
+  const runWrite = useCallback(async (write: () => Promise<{ hash: string; wait(): Promise<unknown> }>, afterSuccess?: () => Promise<void>) => {
     try {
       setState({ stage: "waiting-signature" });
       const tx = await write();
       setState({ stage: "submitted", hash: tx.hash });
       setState({ stage: "confirming", hash: tx.hash });
       await tx.wait();
+      await afterSuccess?.();
       setState({ stage: "success", hash: tx.hash });
     } catch (error) {
       setState(normalizeTransactionError(error));

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CONTRACTS } from "../config/contracts";
 import { TOKENS } from "../config/tokens";
-import { findMissingAllowances, getMintAllowancePlan, getSwapAllowancePlan } from "./allowance";
+import { findMissingAllowances, getMintAllowancePlan, getSwapAllowancePlan, resolveMissingAllowances } from "./allowance";
 
 describe("allowance planning", () => {
   it("checks SwapRouter for exact input swaps", () => {
@@ -48,6 +48,19 @@ describe("allowance planning", () => {
       amount1Desired: 20n,
     });
     const missing = findMissingAllowances(checks, (token) => (token === TOKENS[0].address ? 10n : 0n));
+    expect(missing).toEqual([checks[1]]);
+  });
+
+  it("resolves missing allowances from an async chain reader", async () => {
+    const checks = getMintAllowancePlan({
+      token0: TOKENS[0].address,
+      token1: TOKENS[1].address,
+      amount0Desired: 10n,
+      amount1Desired: 20n,
+    });
+
+    const missing = await resolveMissingAllowances(checks, async (token) => (token === TOKENS[0].address ? 10n : 5n));
+
     expect(missing).toEqual([checks[1]]);
   });
 });
