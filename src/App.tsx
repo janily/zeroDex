@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { TOKENS } from "./config/tokens";
+import { mockPools, mockPositions } from "./data/mockData";
 import { useDexData } from "./hooks/useDexData";
 import { useAllowances } from "./hooks/useAllowances";
 import { usePositions } from "./hooks/usePositions";
@@ -31,131 +32,9 @@ import { getWriteContracts } from "./lib/contracts";
 import { buildCreatePoolParams } from "./lib/createPool";
 import { parseTokenAmount } from "./lib/amount";
 import { getMintAllowancePlan, getSwapAllowancePlan } from "./lib/allowance";
-import { feeToPercent } from "./lib/price";
+import { displayPoolToUiPool, formatNumber, positionDetailsToUiPosition, safeParseSwapAmount, shortAddress, tokenSymbol } from "./lib/uiFormat";
 import type { Address, DisplayPool, TransactionStage } from "./types/domain";
-
-type Page = "swap" | "pools" | "positions" | "activity";
-type PositionStatus = "Active" | "Collectable" | "Closed";
-
-type Pool = {
-  index: number;
-  pair: string;
-  token0: string;
-  token1: string;
-  fee: string;
-  price: string;
-  range: string;
-  liquidity: number;
-  status: "Tradable" | "No liquidity" | "At boundary";
-  volume: string;
-};
-
-type Position = {
-  id: string;
-  pair: string;
-  poolIndex: number;
-  range: string;
-  liquidity: string;
-  owed0: string;
-  owed1: string;
-  status: PositionStatus;
-};
-
-const pools: Pool[] = [
-  {
-    index: 0,
-    pair: "MNTA / MNTB",
-    token0: "MNTA",
-    token1: "MNTB",
-    fee: "0.30%",
-    price: "1 MNTA = 1.2846 MNTB",
-    range: "0.8600 - 1.6200",
-    liquidity: 842300,
-    status: "Tradable",
-    volume: "128.44K",
-  },
-  {
-    index: 1,
-    pair: "MNTA / MNTB",
-    token0: "MNTA",
-    token1: "MNTB",
-    fee: "0.05%",
-    price: "1 MNTA = 1.3018 MNTB",
-    range: "1.1000 - 1.4800",
-    liquidity: 246900,
-    status: "Tradable",
-    volume: "41.08K",
-  },
-  {
-    index: 2,
-    pair: "MNTA / MNTC",
-    token0: "MNTA",
-    token1: "MNTC",
-    fee: "0.30%",
-    price: "1 MNTA = 0.7341 MNTC",
-    range: "0.5000 - 0.9100",
-    liquidity: 0,
-    status: "No liquidity",
-    volume: "0.00",
-  },
-  {
-    index: 3,
-    pair: "MNTB / MNTD",
-    token0: "MNTB",
-    token1: "MNTD",
-    fee: "1.00%",
-    price: "1 MNTB = 2.4781 MNTD",
-    range: "2.1000 - 2.4800",
-    liquidity: 102700,
-    status: "At boundary",
-    volume: "9.72K",
-  },
-  {
-    index: 4,
-    pair: "MNTC / MNTD",
-    token0: "MNTC",
-    token1: "MNTD",
-    fee: "0.30%",
-    price: "1 MNTC = 3.1104 MNTD",
-    range: "2.4000 - 3.7000",
-    liquidity: 532100,
-    status: "Tradable",
-    volume: "76.18K",
-  },
-];
-
-const positions: Position[] = [
-  {
-    id: "#1842",
-    pair: "MNTA / MNTB",
-    poolIndex: 0,
-    range: "0.8600 - 1.6200",
-    liquidity: "42,810.39",
-    owed0: "8.224 MNTA",
-    owed1: "12.781 MNTB",
-    status: "Collectable",
-  },
-  {
-    id: "#1847",
-    pair: "MNTC / MNTD",
-    poolIndex: 4,
-    range: "2.4000 - 3.7000",
-    liquidity: "18,204.11",
-    owed0: "0.000 MNTC",
-    owed1: "0.000 MNTD",
-    status: "Active",
-  },
-  {
-    id: "#1795",
-    pair: "MNTB / MNTD",
-    poolIndex: 3,
-    range: "2.1000 - 2.4800",
-    liquidity: "0.00",
-    owed0: "21.442 MNTB",
-    owed1: "46.002 MNTD",
-    status: "Closed",
-  },
-];
+import type { Page, Pool, Position } from "./types/ui";
 
 const tokens = TOKENS.map((token) => token.symbol);
 
@@ -179,9 +58,9 @@ export function App() {
   const transactions = useTransactions();
   const dexData = useDexData(wallet.account, isReady);
   const positionData = usePositions(wallet.account, isReady);
-  const activePools = dexData.pools.length > 0 ? dexData.pools.map(displayPoolToUiPool) : pools;
+  const activePools = dexData.pools.length > 0 ? dexData.pools.map(displayPoolToUiPool) : mockPools;
   const chainPositions = [...positionData.positions, ...(manualQueriedPosition ? [manualQueriedPosition] : [])];
-  const activePositions = chainPositions.length > 0 ? chainPositions.map(positionDetailsToUiPosition) : positions;
+  const activePositions = chainPositions.length > 0 ? chainPositions.map(positionDetailsToUiPosition) : mockPositions;
 
   const filteredPools = useMemo(() => {
     return activePools.filter((pool) => {
@@ -192,7 +71,7 @@ export function App() {
     });
   }, [activePools, fee, hideEmpty, query]);
 
-  const selectedPool = activePools.find((pool) => pool.index === selectedPoolIndex) ?? activePools[0] ?? pools[0];
+  const selectedPool = activePools.find((pool) => pool.index === selectedPoolIndex) ?? activePools[0] ?? mockPools[0];
   const selectedDisplayPool = dexData.pools.find((pool) => pool.index === selectedPool.index);
   const parsedSwapIn = useMemo(() => safeParseSwapAmount(swapIn, swapTokenIn), [swapIn, swapTokenIn]);
   const parsedSwapOut = useMemo(() => safeParseSwapAmount(swapOut, swapTokenOut), [swapOut, swapTokenOut]);
@@ -681,7 +560,7 @@ function SwapPage(props: {
       </div>
       <div className="route-panel">
         <h3>Route candidates</h3>
-        {(props.quote.candidates.length > 0 ? props.quote.candidates.map(displayPoolToUiPool) : pools.slice(0, 3)).map((pool, index) => (
+        {(props.quote.candidates.length > 0 ? props.quote.candidates.map(displayPoolToUiPool) : mockPools.slice(0, 3)).map((pool, index) => (
           <div className="candidate" key={`${pool.index}-${pool.pair}`}>
             <span className="candidate-rank">{index + 1}</span>
             <div>
@@ -1177,59 +1056,4 @@ function primaryLabel(type: "create" | "liquidity" | "swap", stage: TransactionS
   if (type === "create") return "Create pool";
   if (type === "liquidity") return "Approve and mint";
   return "Approve and swap";
-}
-
-function formatNumber(value: number) {
-  return value.toLocaleString(undefined, { maximumFractionDigits: 0 });
-}
-
-function displayPoolToUiPool(pool: DisplayPool): Pool {
-  const pair = `${pool.token0.symbol} / ${pool.token1.symbol}`;
-  return {
-    index: pool.index,
-    pair,
-    token0: pool.token0.symbol,
-    token1: pool.token1.symbol,
-    fee: feeToPercent(pool.fee),
-    price: `tick ${pool.tick.toString()}`,
-    range: `${pool.tickLower.toString()} - ${pool.tickUpper.toString()} ticks`,
-    liquidity: Number(pool.liquidity > BigInt(Number.MAX_SAFE_INTEGER) ? BigInt(Number.MAX_SAFE_INTEGER) : pool.liquidity),
-    status: pool.status,
-    volume: "chain",
-  };
-}
-
-function tokenSymbol(address: string) {
-  return TOKENS.find((token) => token.address.toLowerCase() === address.toLowerCase())?.symbol ?? "Token";
-}
-
-function shortAddress(address: string) {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
-}
-
-function safeParseSwapAmount(value: string, tokenAddress: string) {
-  try {
-    const token = TOKENS.find((item) => item.address.toLowerCase() === tokenAddress.toLowerCase());
-    return parseTokenAmount(value, token?.decimals ?? 18);
-  } catch {
-    return 0n;
-  }
-}
-
-function positionDetailsToUiPosition(position: { id: string; raw: unknown }): Position {
-  const raw = position.raw as Record<string, unknown>;
-  const liquidity = BigInt((raw.liquidity as bigint | string | number | undefined) ?? 0);
-  const owed0 = BigInt((raw.tokensOwed0 as bigint | string | number | undefined) ?? 0);
-  const owed1 = BigInt((raw.tokensOwed1 as bigint | string | number | undefined) ?? 0);
-  const status: PositionStatus = owed0 > 0n || owed1 > 0n ? "Collectable" : liquidity > 0n ? "Active" : "Closed";
-  return {
-    id: `#${position.id}`,
-    pair: "PositionManager NFT",
-    poolIndex: Number((raw.index as bigint | string | number | undefined) ?? 0),
-    range: `${String(raw.tickLower ?? "-")} - ${String(raw.tickUpper ?? "-")}`,
-    liquidity: liquidity.toString(),
-    owed0: owed0.toString(),
-    owed1: owed1.toString(),
-    status,
-  };
 }
