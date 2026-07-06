@@ -23,6 +23,7 @@ import { useMemo, useState } from "react";
 import { TOKENS } from "./config/tokens";
 import { useDexData } from "./hooks/useDexData";
 import { usePositions } from "./hooks/usePositions";
+import { useSwapQuote } from "./hooks/useSwapQuote";
 import { useTransactions } from "./hooks/useTransactions";
 import { useWallet, type WalletStatus } from "./hooks/useWallet";
 import { getWriteContracts } from "./lib/contracts";
@@ -169,6 +170,8 @@ export function App() {
   const [swapMode, setSwapMode] = useState<"input" | "output">("input");
   const [swapIn, setSwapIn] = useState("250");
   const [swapOut, setSwapOut] = useState("319.42");
+  const [swapTokenIn, setSwapTokenIn] = useState<(typeof TOKENS)[number]["address"]>(TOKENS[0].address);
+  const [swapTokenOut, setSwapTokenOut] = useState<(typeof TOKENS)[number]["address"]>(TOKENS[1].address);
   const wallet = useWallet();
   const isReady = wallet.status === "connected";
   const transactions = useTransactions();
@@ -189,6 +192,19 @@ export function App() {
 
   const selectedPool = activePools.find((pool) => pool.index === selectedPoolIndex) ?? activePools[0] ?? pools[0];
   const selectedDisplayPool = dexData.pools.find((pool) => pool.index === selectedPool.index);
+  const parsedSwapIn = useMemo(() => safeParseSwapAmount(swapIn, swapTokenIn), [swapIn, swapTokenIn]);
+  const parsedSwapOut = useMemo(() => safeParseSwapAmount(swapOut, swapTokenOut), [swapOut, swapTokenOut]);
+  const swapQuote = useSwapQuote({
+    enabled: isReady && dexData.pools.length > 0 && swapTokenIn.toLowerCase() !== swapTokenOut.toLowerCase(),
+    pools: dexData.pools,
+    tokenIn: swapTokenIn,
+    tokenOut: swapTokenOut,
+    mode: swapMode === "input" ? "exact-input" : "exact-output",
+    amountIn: parsedSwapIn,
+    amountOut: parsedSwapOut,
+    account: wallet.account,
+    slippageBps: 50n,
+  });
 
   async function runTransaction(kind: "approve" | "swap" | "mint" | "collect" | "burn" | "create", payload?: TransactionPayload) {
     if (!isReady || !wallet.account || !window.ethereum) return;
@@ -280,6 +296,11 @@ export function App() {
             swapOut={swapOut}
             setSwapIn={setSwapIn}
             setSwapOut={setSwapOut}
+            tokenIn={swapTokenIn}
+            tokenOut={swapTokenOut}
+            setTokenIn={setSwapTokenIn}
+            setTokenOut={setSwapTokenOut}
+            quote={swapQuote}
             openDrawer={setDrawer}
             runTransaction={runTransaction}
             isReady={isReady}
@@ -592,8 +613,13 @@ function SwapPage(props: {
   swapOut: string;
   setSwapIn: (value: string) => void;
   setSwapOut: (value: string) => void;
+  tokenIn: (typeof TOKENS)[number]["address"];
+  tokenOut: (typeof TOKENS)[number]["address"];
+  setTokenIn: (value: (typeof TOKENS)[number]["address"]) => void;
+  setTokenOut: (value: (typeof TOKENS)[number]["address"]) => void;
+  quote: ReturnType<typeof useSwapQuote>;
   openDrawer: (drawer: "create" | "liquidity" | "swap") => void;
-  runTransaction: (kind: "approve" | "swap" | "mint" | "collect" | "create") => void;
+  runTransaction: (kind: "approve" | "swap" | "mint" | "collect" | "burn" | "create") => Promise<void>;
   isReady: boolean;
 }) {
   return (
@@ -616,27 +642,40 @@ function SwapPage(props: {
             Exact output
           </button>
         </div>
-        <TokenAmount label="Pay" token="MNTA" value={props.swapIn} onChange={props.setSwapIn} />
+        <TokenSelect label="Pay token" value={props.tokenIn} onChange={props.setTokenIn} />
+        <TokenAmount label="Pay" token={tokenSymbol(props.tokenIn)} value={props.swapIn} onChange={props.setSwapIn} />
         <button className="swap-switch" onClick={() => {
           props.setSwapIn(props.swapOut);
           props.setSwapOut(props.swapIn);
+          props.setTokenIn(props.tokenOut);
+          props.setTokenOut(props.tokenIn);
         }}>
           <ArrowDownUp size={16} />
         </button>
-        <TokenAmount label="Receive" token="MNTB" value={props.swapOut} onChange={props.setSwapOut} />
+        <TokenSelect label="Receive token" value={props.tokenOut} onChange={props.setTokenOut} />
+        <TokenAmount label="Receive" token={tokenSymbol(props.tokenOut)} value={props.swapOut} onChange={props.setSwapOut} />
         <div className="quote-box">
-          <Metric label="Best route" value="#0 then #1" />
-          <Metric label="Rate" value="1 MNTA = 1.2776 MNTB" />
-          <Metric label={props.swapMode === "input" ? "Minimum received" : "Maximum paid"} value={props.swapMode === "input" ? "316.21 MNTB" : "254.42 MNTA"} />
+          <Metric label="Best route" value={props.quote.quote ? `#${props.quote.quote.pool.index}` : props.quote.loading ? "Quoting..." : "No route"} />
+          <Metric label="Candidates" value={`${props.quote.candidates.length}`} />
+          <Metric
+            label={props.swapMode === "input" ? "Quoted output" : "Quoted input"}
+            value={
+              props.quote.quote
+                ? props.swapMode === "input"
+                  ? props.quote.quote.amountOut.toString()
+                  : props.quote.quote.amountIn.toString()
+                : props.quote.error ?? "Connect Sepolia to quote"
+            }
+          />
         </div>
-        <button className="primary-button wide" onClick={() => props.runTransaction("swap")}>
-          {props.isReady ? "Approve and swap" : "Connect wallet"}
+        <button className="primary-button wide" onClick={() => props.openDrawer("swap")}>
+          {props.isReady ? "Review swap" : "Connect wallet"}
         </button>
       </div>
       <div className="route-panel">
         <h3>Route candidates</h3>
-        {pools.slice(0, 3).map((pool, index) => (
-          <div className="candidate" key={pool.index}>
+        {(props.quote.candidates.length > 0 ? props.quote.candidates.map(displayPoolToUiPool) : pools.slice(0, 3)).map((pool, index) => (
+          <div className="candidate" key={`${pool.index}-${pool.pair}`}>
             <span className="candidate-rank">{index + 1}</span>
             <div>
               <strong>{pool.pair} #{pool.index}</strong>
@@ -1089,6 +1128,19 @@ function displayPoolToUiPool(pool: DisplayPool): Pool {
     status: pool.status,
     volume: "chain",
   };
+}
+
+function tokenSymbol(address: string) {
+  return TOKENS.find((token) => token.address.toLowerCase() === address.toLowerCase())?.symbol ?? "Token";
+}
+
+function safeParseSwapAmount(value: string, tokenAddress: string) {
+  try {
+    const token = TOKENS.find((item) => item.address.toLowerCase() === tokenAddress.toLowerCase());
+    return parseTokenAmount(value, token?.decimals ?? 18);
+  } catch {
+    return 0n;
+  }
 }
 
 function positionDetailsToUiPosition(position: { id: string; raw: unknown }): Position {
