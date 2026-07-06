@@ -375,6 +375,7 @@ p {
 .drawer,
 .quote-box,
 .inline-error,
+.chain-banner,
 .activity-list {
   border: 1px solid #242a37;
   border-radius: 10px;
@@ -689,6 +690,31 @@ p {
   margin-bottom: 12px;
   border-color: #5c4422;
   background: #211a12;
+}
+
+.inline-error.compact-error,
+.chain-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.chain-banner {
+  border-color: #2c3240;
+  background: #151a24;
+}
+
+.chain-banner svg {
+  animation: spin 900ms linear infinite;
+}
+
+.chain-banner div,
+.compact-error div {
+  display: grid;
+  gap: 2px;
+  flex: 1;
 }
 
 .inline-error div {

@@ -20,7 +20,11 @@ import {
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { TOKENS } from "./config/tokens";
+import { useDexData } from "./hooks/useDexData";
 import { useWallet, type WalletStatus } from "./hooks/useWallet";
+import { feeToPercent } from "./lib/price";
+import type { DisplayPool } from "./types/domain";
 
 type Page = "swap" | "pools" | "positions" | "activity";
 type TxStage = "idle" | "approve" | "sign" | "confirm" | "success" | "error";
@@ -146,7 +150,7 @@ const positions: Position[] = [
   },
 ];
 
-const tokens = ["MNTA", "MNTB", "MNTC", "MNTD"];
+const tokens = TOKENS.map((token) => token.symbol);
 
 export function App() {
   const [page, setPage] = useState<Page>("pools");
@@ -162,18 +166,20 @@ export function App() {
   const [swapIn, setSwapIn] = useState("250");
   const [swapOut, setSwapOut] = useState("319.42");
   const wallet = useWallet();
+  const isReady = wallet.status === "connected";
+  const dexData = useDexData(wallet.account, isReady);
+  const activePools = dexData.pools.length > 0 ? dexData.pools.map(displayPoolToUiPool) : pools;
 
   const filteredPools = useMemo(() => {
-    return pools.filter((pool) => {
+    return activePools.filter((pool) => {
       const matchesQuery = `${pool.pair} ${pool.index}`.toLowerCase().includes(query.toLowerCase());
       const matchesFee = fee === "All fees" || pool.fee === fee;
       const matchesEmpty = !hideEmpty || pool.liquidity > 0;
       return matchesQuery && matchesFee && matchesEmpty;
     });
-  }, [fee, hideEmpty, query]);
+  }, [activePools, fee, hideEmpty, query]);
 
-  const selectedPool = pools.find((pool) => pool.index === selectedPoolIndex) ?? pools[0];
-  const isReady = wallet.status === "connected";
+  const selectedPool = activePools.find((pool) => pool.index === selectedPoolIndex) ?? activePools[0] ?? pools[0];
 
   function runTransaction(kind: "approve" | "swap" | "mint" | "collect" | "create") {
     if (!isReady) return;
@@ -207,6 +213,9 @@ export function App() {
             openDrawer={setDrawer}
             runTransaction={runTransaction}
             isReady={isReady}
+            chainLoading={dexData.loading}
+            chainError={dexData.error}
+            refreshChainData={dexData.refresh}
           />
         )}
         {page === "swap" && (
@@ -354,6 +363,9 @@ function PoolsPage(props: {
   openDrawer: (drawer: "create" | "liquidity" | "swap") => void;
   runTransaction: (kind: "approve" | "swap" | "mint" | "collect" | "create") => void;
   isReady: boolean;
+  chainLoading: boolean;
+  chainError?: string;
+  refreshChainData: () => Promise<void>;
 }) {
   return (
     <div className="page-grid">
@@ -367,6 +379,20 @@ function PoolsPage(props: {
             <Plus size={16} /> Create pool
           </button>
         </div>
+        {(props.chainLoading || props.chainError) && (
+          <div className={props.chainError ? "inline-error compact-error" : "chain-banner"}>
+            {props.chainError ? <X size={16} /> : <Loader2 size={16} />}
+            <div>
+              <strong>{props.chainError ? "Chain data unavailable" : "Loading Sepolia data"}</strong>
+              <span>{props.chainError ?? "Reading PoolManager.getAllPools and ERC20 balances."}</span>
+            </div>
+            {props.chainError && (
+              <button className="secondary-button" onClick={() => void props.refreshChainData()}>
+                Retry
+              </button>
+            )}
+          </div>
+        )}
         <div className="toolbar">
           <label className="search-box">
             <Search size={16} />
@@ -857,4 +883,20 @@ function primaryLabel(type: "create" | "liquidity" | "swap", stage: TxStage) {
 
 function formatNumber(value: number) {
   return value.toLocaleString(undefined, { maximumFractionDigits: 0 });
+}
+
+function displayPoolToUiPool(pool: DisplayPool): Pool {
+  const pair = `${pool.token0.symbol} / ${pool.token1.symbol}`;
+  return {
+    index: pool.index,
+    pair,
+    token0: pool.token0.symbol,
+    token1: pool.token1.symbol,
+    fee: feeToPercent(pool.fee),
+    price: `tick ${pool.tick.toString()}`,
+    range: `${pool.tickLower.toString()} - ${pool.tickUpper.toString()} ticks`,
+    liquidity: Number(pool.liquidity > BigInt(Number.MAX_SAFE_INTEGER) ? BigInt(Number.MAX_SAFE_INTEGER) : pool.liquidity),
+    status: pool.status,
+    volume: "chain",
+  };
 }
