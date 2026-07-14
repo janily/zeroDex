@@ -21,6 +21,7 @@ export function SwapPage(props: {
   openDrawer: OpenDrawer;
   runTransaction: RunTransaction;
   isReady: boolean;
+  canReview: boolean;
 }) {
   return (
     <section className="swap-layout">
@@ -71,7 +72,7 @@ export function SwapPage(props: {
             }
           />
         </div>
-        <button className="primary-button wide" onClick={() => props.openDrawer("swap")}>
+        <button className="primary-button wide" disabled={props.isReady && !props.canReview} onClick={() => props.openDrawer("swap")}>
           {props.isReady ? "Review swap" : "Connect wallet"}
         </button>
       </div>

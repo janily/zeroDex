@@ -5,8 +5,9 @@ import { useAllowances } from "../hooks/useAllowances";
 import { getMintAllowancePlan, getSwapAllowancePlan } from "../lib/allowance";
 import { parseTokenAmount } from "../lib/amount";
 import { shortAddress, tokenSymbol } from "../lib/uiFormat";
+import type { SwapExecutionPayload } from "../lib/swapExecution";
 import type { Address, DisplayPool, TransactionStage } from "../types/domain";
-import type { CreateDrawerState, DrawerSubmitPayload, DrawerType, LiquidityDrawerState, RunTransaction, SwapDrawerState } from "../types/app";
+import type { CreateDrawerState, DrawerType, LiquidityDrawerState, RunTransaction } from "../types/app";
 import type { Pool } from "../types/ui";
 import { TxTimeline } from "./common";
 import { CreatePoolForm, LiquidityForm, SwapDrawerForm } from "./forms";
@@ -20,6 +21,9 @@ export function Drawer({
   txError,
   approveToken,
   walletAccount,
+  swapExecution,
+  swapSummary,
+  swapHasInputBalance = true,
   runTransaction,
   isReady,
 }: {
@@ -31,6 +35,14 @@ export function Drawer({
   txError?: string;
   approveToken: (token: Address, spender: Address, amount: bigint) => Promise<void>;
   walletAccount?: `0x${string}`;
+  swapExecution?: SwapExecutionPayload;
+  swapSummary?: {
+    route?: string;
+    pay: string;
+    receive: string;
+    slippage: string;
+  };
+  swapHasInputBalance?: boolean;
   runTransaction: RunTransaction;
   isReady: boolean;
 }) {
@@ -48,13 +60,9 @@ export function Drawer({
     amount0: "140",
     amount1: "179.84",
   });
-  const [swapForm, setSwapForm] = useState<SwapDrawerState>({
-    type: "swap",
-    amountIn: "250",
-  });
   const title = type === "create" ? "Create pool" : type === "liquidity" ? "Add liquidity" : "Swap through pool";
   const action = type === "create" ? "create" : type === "liquidity" ? "mint" : "swap";
-  const payload: DrawerSubmitPayload = type === "create" ? createForm : type === "liquidity" ? liquidityForm : swapForm;
+  const payload = type === "create" ? createForm : type === "liquidity" ? liquidityForm : swapExecution;
   const allowanceChecks = useMemo(() => {
     if (!selectedDisplayPool) return [];
     try {
@@ -66,14 +74,15 @@ export function Drawer({
           amount1Desired: parseTokenAmount(liquidityForm.amount1, selectedDisplayPool.token1.decimals),
         });
       }
-      if (type === "swap") {
-        const amountIn = parseTokenAmount(swapForm.amountIn, selectedDisplayPool.token0.decimals);
+      if (type === "swap" && swapExecution) {
+        const amountIn = swapExecution.mode === "exact-input" ? swapExecution.amountIn : 0n;
+        const amountInMaximum = swapExecution.mode === "exact-output" ? swapExecution.amountInMaximum : amountIn;
         return [
           getSwapAllowancePlan({
-            tokenIn: selectedDisplayPool.token0.address,
-            mode: "exact-input",
+            tokenIn: swapExecution.tokenIn,
+            mode: swapExecution.mode,
             amountIn,
-            amountInMaximum: amountIn,
+            amountInMaximum,
           }),
         ];
       }
@@ -81,9 +90,12 @@ export function Drawer({
       return [];
     }
     return [];
-  }, [liquidityForm.amount0, liquidityForm.amount1, selectedDisplayPool, swapForm.amountIn, type]);
+  }, [liquidityForm.amount0, liquidityForm.amount1, selectedDisplayPool, swapExecution, type]);
   const allowances = useAllowances(walletAccount, allowanceChecks, isReady && type !== "create");
-  const canSubmit = isReady && (type === "create" || Boolean(selectedDisplayPool));
+  const canSubmit =
+    isReady &&
+    (type === "create" || Boolean(selectedDisplayPool)) &&
+    (type !== "swap" || (Boolean(swapExecution) && swapHasInputBalance));
   const nextAllowance = allowances.next;
   const primaryText = !isReady
     ? "Connect wallet"
@@ -107,7 +119,7 @@ export function Drawer({
         ) : type === "liquidity" ? (
           <LiquidityForm selectedPool={selectedPool} value={liquidityForm} onChange={setLiquidityForm} />
         ) : (
-          <SwapDrawerForm selectedPool={selectedPool} value={swapForm} onChange={setSwapForm} />
+          <SwapDrawerForm selectedPool={selectedPool} summary={swapSummary} />
         )}
         {!selectedDisplayPool && type !== "create" && (
           <div className="inline-error compact-error">
@@ -115,6 +127,24 @@ export function Drawer({
             <div>
               <strong>Chain pool required</strong>
               <span>Connect Sepolia and refresh pools before submitting this write.</span>
+            </div>
+          </div>
+        )}
+        {type === "swap" && !swapExecution && (
+          <div className="inline-error compact-error">
+            <X size={16} />
+            <div>
+              <strong>Swap quote required</strong>
+              <span>Select a tradable route and enter a valid amount before submitting.</span>
+            </div>
+          </div>
+        )}
+        {type === "swap" && swapExecution && !swapHasInputBalance && (
+          <div className="inline-error compact-error">
+            <X size={16} />
+            <div>
+              <strong>Insufficient balance</strong>
+              <span>Your input token balance does not cover this swap.</span>
             </div>
           </div>
         )}
@@ -150,6 +180,7 @@ export function Drawer({
               void approveToken(nextAllowance.token, nextAllowance.spender, nextAllowance.required).then(() => allowances.refresh());
               return;
             }
+            if (!payload) return;
             void runTransaction(action, payload);
           }}
         >

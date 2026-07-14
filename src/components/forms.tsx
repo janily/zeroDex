@@ -1,4 +1,4 @@
-import type { CreateDrawerState, LiquidityDrawerState, SwapDrawerState } from "../types/app";
+import type { CreateDrawerState, LiquidityDrawerState } from "../types/app";
 import type { Pool } from "../types/ui";
 import { InputBlock, Metric, TokenAmount, TokenSelect } from "./common";
 
@@ -39,19 +39,22 @@ export function LiquidityForm({
 
 export function SwapDrawerForm({
   selectedPool,
-  value,
-  onChange,
+  summary,
 }: {
   selectedPool: Pool;
-  value: SwapDrawerState;
-  onChange: (value: SwapDrawerState) => void;
+  summary?: {
+    route?: string;
+    pay: string;
+    receive: string;
+    slippage: string;
+  };
 }) {
   return (
     <div className="form-stack">
-      <InputBlock label="Route" value={`${selectedPool.pair} #${selectedPool.index}`} helper="Only same-pair multi-pool routing is included." />
-      <TokenAmount label="Pay" token={selectedPool.token0} value={value.amountIn} onChange={(amountIn) => onChange({ ...value, amountIn })} />
-      <InputBlock label="Receive" value="Quoted on submit" />
-      <InputBlock label="Slippage" value="0.50%" />
+      <InputBlock label="Route" value={summary?.route ?? `${selectedPool.pair} #${selectedPool.index}`} helper="Best same-pair pool selected from the latest quote." />
+      <InputBlock label="Pay" value={summary?.pay ?? "Quote required"} />
+      <InputBlock label="Receive" value={summary?.receive ?? "Quote required"} />
+      <InputBlock label="Slippage" value={summary?.slippage ?? "0.50%"} />
     </div>
   );
 }

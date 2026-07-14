@@ -1,4 +1,5 @@
 import type { TOKENS } from "../config/tokens";
+import type { SwapExecutionPayload } from "../lib/swapExecution";
 
 export type TokenAddress = (typeof TOKENS)[number]["address"];
 
@@ -20,12 +21,7 @@ export type LiquidityDrawerState = {
   amount1: string;
 };
 
-export type SwapDrawerState = {
-  type: "swap";
-  amountIn: string;
-};
-
-export type DrawerSubmitPayload = CreateDrawerState | LiquidityDrawerState | SwapDrawerState;
+export type DrawerSubmitPayload = CreateDrawerState | LiquidityDrawerState | SwapExecutionPayload;
 
 export type PositionSubmitPayload = {
   type: "position";

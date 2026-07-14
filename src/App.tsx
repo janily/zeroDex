@@ -8,10 +8,11 @@ import { usePositions } from "./hooks/usePositions";
 import { useSwapQuote } from "./hooks/useSwapQuote";
 import { useTransactions } from "./hooks/useTransactions";
 import { useWallet } from "./hooks/useWallet";
-import { parseTokenAmount } from "./lib/amount";
+import { formatTokenAmount, parseTokenAmount } from "./lib/amount";
 import { getWriteContracts } from "./lib/contracts";
 import { buildCreatePoolParams } from "./lib/createPool";
-import { displayPoolToUiPool, positionDetailsToUiPosition, safeParseSwapAmount } from "./lib/uiFormat";
+import { buildSwapExecution } from "./lib/swapExecution";
+import { displayPoolToUiPool, positionDetailsToUiPosition, safeParseSwapAmount, tokenSymbol } from "./lib/uiFormat";
 import { ActivityPage } from "./pages/ActivityPage";
 import { PoolsPage } from "./pages/PoolsPage";
 import { PositionsPage } from "./pages/PositionsPage";
@@ -68,6 +69,36 @@ export function App() {
     account: wallet.account,
     slippageBps: 50n,
   });
+  const swapExecution = useMemo(() => {
+    if (swapMode === "input" && parsedSwapIn === undefined) return undefined;
+    if (swapMode === "output" && parsedSwapOut === undefined) return undefined;
+    return buildSwapExecution({
+      mode: swapMode === "input" ? "exact-input" : "exact-output",
+      tokenIn: swapTokenIn,
+      tokenOut: swapTokenOut,
+      amountIn: parsedSwapIn ?? 0n,
+      amountOut: parsedSwapOut ?? 0n,
+      quote: swapQuote.quote,
+      slippageBps: 50n,
+    });
+  }, [parsedSwapIn, parsedSwapOut, swapMode, swapQuote.quote, swapTokenIn, swapTokenOut]);
+  const swapRequiredInput = swapExecution?.mode === "exact-input" ? swapExecution.amountIn : swapExecution?.amountInMaximum;
+  const swapInputBalance = dexData.balances.find((balance) => balance.token.toLowerCase() === swapTokenIn.toLowerCase())?.value;
+  const swapHasInputBalance = swapRequiredInput === undefined || (swapInputBalance !== undefined && swapInputBalance >= swapRequiredInput);
+  const swapInputDecimals = TOKENS.find((token) => token.address.toLowerCase() === swapTokenIn.toLowerCase())?.decimals ?? 18;
+  const swapOutputDecimals = TOKENS.find((token) => token.address.toLowerCase() === swapTokenOut.toLowerCase())?.decimals ?? 18;
+  const swapSummary = {
+    route: swapExecution ? `Pool #${swapExecution.poolIndex}` : undefined,
+    pay:
+      swapExecution?.mode === "exact-output"
+        ? `${formatTokenAmount(swapExecution.amountInMaximum, swapInputDecimals)} ${tokenSymbol(swapTokenIn)} max`
+        : `${swapIn} ${tokenSymbol(swapTokenIn)}`,
+    receive:
+      swapExecution?.mode === "exact-input"
+        ? `${formatTokenAmount(swapExecution.amountOutMinimum, swapOutputDecimals)} ${tokenSymbol(swapTokenOut)} min`
+        : `${swapOut} ${tokenSymbol(swapTokenOut)}`,
+    slippage: "0.50%",
+  };
 
   const runTransaction: RunTransaction = async (kind, payload) => {
     if (!isReady || !wallet.account || !window.ethereum) return;
@@ -94,15 +125,28 @@ export function App() {
           });
         }
 
-        if (kind === "swap" && selectedDisplayPool && payload?.type === "swap") {
+        if (kind === "swap" && payload?.type === "swap" && payload.mode === "exact-input") {
           return contracts.swapRouter.exactInput({
-            tokenIn: selectedDisplayPool.token0.address,
-            tokenOut: selectedDisplayPool.token1.address,
-            indexPath: [BigInt(selectedDisplayPool.index)],
+            tokenIn: payload.tokenIn,
+            tokenOut: payload.tokenOut,
+            indexPath: [BigInt(payload.poolIndex)],
             recipient: wallet.account,
             deadline,
-            amountIn: parseTokenAmount(payload.amountIn, selectedDisplayPool.token0.decimals),
-            amountOutMinimum: 0n,
+            amountIn: payload.amountIn,
+            amountOutMinimum: payload.amountOutMinimum,
+            sqrtPriceLimitX96: 0n,
+          });
+        }
+
+        if (kind === "swap" && payload?.type === "swap" && payload.mode === "exact-output") {
+          return contracts.swapRouter.exactOutput({
+            tokenIn: payload.tokenIn,
+            tokenOut: payload.tokenOut,
+            indexPath: [BigInt(payload.poolIndex)],
+            recipient: wallet.account,
+            deadline,
+            amountOut: payload.amountOut,
+            amountInMaximum: payload.amountInMaximum,
             sqrtPriceLimitX96: 0n,
           });
         }
@@ -170,6 +214,7 @@ export function App() {
             openDrawer={setDrawer}
             runTransaction={runTransaction}
             isReady={isReady}
+            canReview={Boolean(swapExecution) && swapHasInputBalance}
           />
         )}
         {page === "positions" && (
@@ -204,6 +249,9 @@ export function App() {
           txError={transactions.error}
           approveToken={transactions.approveToken}
           walletAccount={wallet.account}
+          swapExecution={swapExecution}
+          swapSummary={swapSummary}
+          swapHasInputBalance={swapHasInputBalance}
           runTransaction={runTransaction}
           isReady={isReady}
         />
