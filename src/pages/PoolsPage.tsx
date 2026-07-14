@@ -13,7 +13,7 @@ export function PoolsPage(props: {
   setHideEmpty: (hide: boolean) => void;
   pools: Pool[];
   selectedPool: Pool;
-  setSelectedPoolIndex: (index: number) => void;
+  setSelectedPoolId: (id: string) => void;
   openDrawer: OpenDrawer;
   runTransaction: RunTransaction;
   isReady: boolean;
@@ -67,7 +67,7 @@ export function PoolsPage(props: {
             Hide empty
           </button>
         </div>
-        <PoolTable pools={props.pools} selectedPool={props.selectedPool} setSelectedPoolIndex={props.setSelectedPoolIndex} />
+        <PoolTable pools={props.pools} selectedPool={props.selectedPool} setSelectedPoolId={props.setSelectedPoolId} />
       </section>
       <section className="detail-column">
         <PoolDetail pool={props.selectedPool} openDrawer={props.openDrawer} runTransaction={props.runTransaction} isReady={props.isReady} />
@@ -79,11 +79,11 @@ export function PoolsPage(props: {
 function PoolTable({
   pools,
   selectedPool,
-  setSelectedPoolIndex,
+  setSelectedPoolId,
 }: {
   pools: Pool[];
   selectedPool: Pool;
-  setSelectedPoolIndex: (index: number) => void;
+  setSelectedPoolId: (id: string) => void;
 }) {
   return (
     <div className="table-surface">
@@ -105,9 +105,9 @@ function PoolTable({
       ) : (
         pools.map((pool) => (
           <button
-            key={pool.index}
-            className={`table-row pool-row ${pool.index === selectedPool.index ? "selected" : ""}`}
-            onClick={() => setSelectedPoolIndex(pool.index)}
+            key={pool.id}
+            className={`table-row pool-row ${pool.id === selectedPool.id ? "selected" : ""}`}
+            onClick={() => setSelectedPoolId(pool.id)}
           >
             <strong>{pool.pair}</strong>
             <code>#{pool.index}</code>

@@ -1,4 +1,4 @@
-import type { Address, PoolStatus } from "../types/domain";
+import type { Address, DisplayPool, PoolStatus } from "../types/domain";
 
 export function sortTokenAddresses(a: Address, b: Address): [Address, Address] {
   return a.toLowerCase() < b.toLowerCase() ? [a, b] : [b, a];
@@ -26,4 +26,13 @@ export function formatRange(baseSymbol: string, quoteSymbol: string, min: string
 export function feeToPercent(fee: number | bigint): string {
   const feeNumber = typeof fee === "bigint" ? Number(fee) : fee;
   return `${(feeNumber / 10_000).toFixed(2)}%`;
+}
+
+export function tickToSqrtPriceX96(tick: bigint | number): bigint {
+  return BigInt(Math.floor(Math.sqrt(1.0001 ** Number(tick)) * 2 ** 96));
+}
+
+export function getSwapPriceLimit(pool: DisplayPool, tokenIn: Address): bigint {
+  const zeroForOne = tokenIn.toLowerCase() === pool.token0.address.toLowerCase();
+  return tickToSqrtPriceX96(zeroForOne ? pool.tickLower : pool.tickUpper);
 }

@@ -22,14 +22,14 @@ describe("routing utilities", () => {
   });
 
   it("selects best exact input quote by maximum output", () => {
-    const first = { pool: pool(0, 100n, "Tradable"), amountIn: 10n, amountOut: 12n };
-    const second = { pool: pool(1, 100n, "Tradable"), amountIn: 10n, amountOut: 13n };
+    const first = { pool: pool(0, 100n, "Tradable"), amountIn: 10n, amountOut: 12n, sqrtPriceLimitX96: 1n };
+    const second = { pool: pool(1, 100n, "Tradable"), amountIn: 10n, amountOut: 13n, sqrtPriceLimitX96: 1n };
     expect(selectBestQuote("exact-input", [first, second])).toBe(second);
   });
 
   it("selects best exact output quote by minimum input", () => {
-    const first = { pool: pool(0, 100n, "Tradable"), amountIn: 10n, amountOut: 12n };
-    const second = { pool: pool(1, 100n, "Tradable"), amountIn: 9n, amountOut: 12n };
+    const first = { pool: pool(0, 100n, "Tradable"), amountIn: 10n, amountOut: 12n, sqrtPriceLimitX96: 1n };
+    const second = { pool: pool(1, 100n, "Tradable"), amountIn: 9n, amountOut: 12n, sqrtPriceLimitX96: 1n };
     expect(selectBestQuote("exact-output", [first, second])).toBe(second);
   });
 });

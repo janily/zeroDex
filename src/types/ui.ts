@@ -3,6 +3,7 @@ export type Page = "swap" | "pools" | "positions" | "activity";
 export type PositionStatus = "Active" | "Collectable" | "Closed";
 
 export type Pool = {
+  id: string;
   index: number;
   pair: string;
   token0: string;

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getReadContracts } from "../lib/contracts";
+import { getSwapPriceLimit } from "../lib/price";
 import { getCandidatePools, selectBestQuote, type QuoteResult } from "../lib/routing";
 import type { Address, DisplayPool, SwapMode } from "../types/domain";
 import "../types/ethereum";
@@ -23,17 +24,33 @@ export function useSwapQuote(input: {
   account?: Address;
   slippageBps: bigint;
 }): SwapQuoteState {
+  const { enabled, pools, tokenIn, tokenOut, mode, amountIn, amountOut, account, slippageBps } = input;
   const [quote, setQuote] = useState<QuoteResult | undefined>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const requestId = useRef(0);
+  const poolsKey = pools
+    .map((pool) =>
+      [
+        pool.index,
+        pool.token0.address.toLowerCase(),
+        pool.token1.address.toLowerCase(),
+        pool.status,
+        pool.liquidity.toString(),
+      ].join(":"),
+    )
+    .join("|");
 
   const candidates = useMemo(() => {
-    if (!input.tokenIn || !input.tokenOut) return [];
-    return getCandidatePools(input.pools, input.tokenIn, input.tokenOut);
-  }, [input.pools, input.tokenIn, input.tokenOut]);
+    if (!tokenIn || !tokenOut) return [];
+    return getCandidatePools(pools, tokenIn, tokenOut);
+  }, [poolsKey, tokenIn, tokenOut]);
 
   const refresh = useCallback(async () => {
-    if (!input.enabled || !window.ethereum || !input.tokenIn || !input.tokenOut || candidates.length === 0) {
+    const currentRequest = requestId.current + 1;
+    requestId.current = currentRequest;
+
+    if (!enabled || !window.ethereum || !tokenIn || !tokenOut || candidates.length === 0) {
       setQuote(undefined);
       setError(undefined);
       setLoading(false);
@@ -44,53 +61,54 @@ export function useSwapQuote(input: {
     setError(undefined);
     try {
       const contracts = getReadContracts(window.ethereum);
-      const deadline = BigInt(Math.floor(Date.now() / 1000) + 20 * 60);
-      const recipient = input.account ?? "0x0000000000000000000000000000000000000000";
-      const quotes = await Promise.all(
+      const settledQuotes = await Promise.allSettled(
         candidates.map(async (pool) => {
-          const indexPath = [BigInt(pool.index)];
-          if (input.mode === "exact-input") {
-            const amountIn = input.amountIn ?? 0n;
-            const amountOutMinimum = 0n;
-            const amountOut = BigInt(
+          const indexPath = [pool.index];
+          const sqrtPriceLimitX96 = getSwapPriceLimit(pool, tokenIn);
+          if (mode === "exact-input") {
+            const quotedAmountIn = amountIn ?? 0n;
+            const quotedAmountOut = BigInt(
               await contracts.swapRouter.quoteExactInput.staticCall({
-                tokenIn: input.tokenIn,
-                tokenOut: input.tokenOut,
+                tokenIn,
+                tokenOut,
                 indexPath,
-                recipient,
-                deadline,
-                amountIn,
-                amountOutMinimum,
-                sqrtPriceLimitX96: 0n,
+                amountIn: quotedAmountIn,
+                sqrtPriceLimitX96,
               }),
             );
-            return { pool, amountIn, amountOut };
+            return { pool, amountIn: quotedAmountIn, amountOut: quotedAmountOut, sqrtPriceLimitX96 };
           }
 
-          const amountOut = input.amountOut ?? 0n;
-          const amountInMaximum = (amountOut * (10_000n + input.slippageBps)) / 10_000n;
-          const amountIn = BigInt(
+          const quotedAmountOut = amountOut ?? 0n;
+          const quotedAmountIn = BigInt(
             await contracts.swapRouter.quoteExactOutput.staticCall({
-              tokenIn: input.tokenIn,
-              tokenOut: input.tokenOut,
+              tokenIn,
+              tokenOut,
               indexPath,
-              recipient,
-              deadline,
-              amountOut,
-              amountInMaximum,
-              sqrtPriceLimitX96: 0n,
+              amountOut: quotedAmountOut,
+              sqrtPriceLimitX96,
             }),
           );
-          return { pool, amountIn, amountOut };
+          return { pool, amountIn: quotedAmountIn, amountOut: quotedAmountOut, sqrtPriceLimitX96 };
         }),
       );
-      setQuote(selectBestQuote(input.mode, quotes));
+
+      if (requestId.current !== currentRequest) return;
+
+      const quotes = settledQuotes
+        .filter((result): result is PromiseFulfilledResult<QuoteResult> => result.status === "fulfilled")
+        .map((result) => result.value);
+      const bestQuote = selectBestQuote(mode, quotes);
+      setQuote(bestQuote);
+      setError(bestQuote ? undefined : "No route quoted successfully");
     } catch (caught) {
+      if (requestId.current !== currentRequest) return;
       setError(caught instanceof Error ? caught.message : "Unable to quote swap");
     } finally {
+      if (requestId.current !== currentRequest) return;
       setLoading(false);
     }
-  }, [candidates, input]);
+  }, [amountIn, amountOut, candidates, enabled, mode, tokenIn, tokenOut]);
 
   useEffect(() => {
     void refresh();

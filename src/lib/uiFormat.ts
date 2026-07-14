@@ -11,6 +11,7 @@ export function formatNumber(value: number) {
 export function displayPoolToUiPool(pool: DisplayPool): Pool {
   const pair = `${pool.token0.symbol} / ${pool.token1.symbol}`;
   return {
+    id: `${pool.token0.address.toLowerCase()}-${pool.token1.address.toLowerCase()}-${pool.index}`,
     index: pool.index,
     pair,
     token0: pool.token0.symbol,

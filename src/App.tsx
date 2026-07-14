@@ -25,7 +25,7 @@ export function App() {
   const [query, setQuery] = useState("");
   const [fee, setFee] = useState("All fees");
   const [hideEmpty, setHideEmpty] = useState(true);
-  const [selectedPoolIndex, setSelectedPoolIndex] = useState(0);
+  const [selectedPoolId, setSelectedPoolId] = useState<string>();
   const [drawer, setDrawer] = useState<DrawerType | null>(null);
   const [zanFailed, setZanFailed] = useState(false);
   const [manualPosition, setManualPosition] = useState("");
@@ -44,6 +44,7 @@ export function App() {
   const activePools = dexData.pools.length > 0 ? dexData.pools.map(displayPoolToUiPool) : mockPools;
   const chainPositions = [...positionData.positions, ...(manualQueriedPosition ? [manualQueriedPosition] : [])];
   const activePositions = chainPositions.length > 0 ? chainPositions.map(positionDetailsToUiPosition) : mockPositions;
+  const canWritePositions = isReady && chainPositions.length > 0;
 
   const filteredPools = useMemo(() => {
     return activePools.filter((pool) => {
@@ -54,8 +55,12 @@ export function App() {
     });
   }, [activePools, fee, hideEmpty, query]);
 
-  const selectedPool = activePools.find((pool) => pool.index === selectedPoolIndex) ?? activePools[0] ?? mockPools[0];
-  const selectedDisplayPool = dexData.pools.find((pool) => pool.index === selectedPool.index);
+  const selectedPool = activePools.find((pool) => pool.id === selectedPoolId) ?? activePools[0] ?? mockPools[0];
+  const selectedDisplayPool = dexData.pools.find(
+    (pool) =>
+      pool.index === selectedPool.index &&
+      `${pool.token0.symbol} / ${pool.token1.symbol}` === selectedPool.pair,
+  );
   const parsedSwapIn = useMemo(() => safeParseSwapAmount(swapIn, swapTokenIn), [swapIn, swapTokenIn]);
   const parsedSwapOut = useMemo(() => safeParseSwapAmount(swapOut, swapTokenOut), [swapOut, swapTokenOut]);
   const swapQuote = useSwapQuote({
@@ -129,12 +134,12 @@ export function App() {
           return contracts.swapRouter.exactInput({
             tokenIn: payload.tokenIn,
             tokenOut: payload.tokenOut,
-            indexPath: [BigInt(payload.poolIndex)],
+            indexPath: [payload.poolIndex],
             recipient: wallet.account,
             deadline,
             amountIn: payload.amountIn,
             amountOutMinimum: payload.amountOutMinimum,
-            sqrtPriceLimitX96: 0n,
+            sqrtPriceLimitX96: payload.sqrtPriceLimitX96,
           });
         }
 
@@ -142,12 +147,12 @@ export function App() {
           return contracts.swapRouter.exactOutput({
             tokenIn: payload.tokenIn,
             tokenOut: payload.tokenOut,
-            indexPath: [BigInt(payload.poolIndex)],
+            indexPath: [payload.poolIndex],
             recipient: wallet.account,
             deadline,
             amountOut: payload.amountOut,
             amountInMaximum: payload.amountInMaximum,
-            sqrtPriceLimitX96: 0n,
+            sqrtPriceLimitX96: payload.sqrtPriceLimitX96,
           });
         }
 
@@ -189,7 +194,7 @@ export function App() {
             setHideEmpty={setHideEmpty}
             pools={filteredPools}
             selectedPool={selectedPool}
-            setSelectedPoolIndex={setSelectedPoolIndex}
+            setSelectedPoolId={setSelectedPoolId}
             openDrawer={setDrawer}
             runTransaction={runTransaction}
             isReady={isReady}
@@ -225,7 +230,7 @@ export function App() {
             setManualPosition={setManualPosition}
             runTransaction={runTransaction}
             openDrawer={setDrawer}
-            isReady={isReady}
+            canWritePositions={canWritePositions}
             positions={activePositions}
             positionsLoading={positionData.loading}
             positionsError={positionData.error}

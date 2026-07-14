@@ -10,7 +10,7 @@ export function PositionsPage(props: {
   setManualPosition: (position: string) => void;
   runTransaction: RunTransaction;
   openDrawer: OpenDrawer;
-  isReady: boolean;
+  canWritePositions: boolean;
   positions: Position[];
   positionsLoading: boolean;
   positionsError?: string;
@@ -68,7 +68,7 @@ export function PositionsPage(props: {
             <span className={`position-status ${position.status.toLowerCase()}`}>{position.status}</span>
             <button
               className="secondary-button"
-              disabled={!props.isReady}
+              disabled={!props.canWritePositions}
               onClick={() =>
                 void props.runTransaction(position.status === "Collectable" ? "collect" : "burn", {
                   type: "position",

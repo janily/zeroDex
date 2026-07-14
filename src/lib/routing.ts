@@ -4,6 +4,7 @@ export type QuoteResult = {
   pool: DisplayPool;
   amountIn: bigint;
   amountOut: bigint;
+  sqrtPriceLimitX96: bigint;
 };
 
 export function isSamePair(pool: DisplayPool, tokenIn: Address, tokenOut: Address): boolean {

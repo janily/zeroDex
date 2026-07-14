@@ -2,6 +2,7 @@ import type { Pool, Position } from "../types/ui";
 
 export const mockPools: Pool[] = [
   {
+    id: "MNTA-MNTB-0",
     index: 0,
     pair: "MNTA / MNTB",
     token0: "MNTA",
@@ -14,6 +15,7 @@ export const mockPools: Pool[] = [
     volume: "128.44K",
   },
   {
+    id: "MNTA-MNTB-1",
     index: 1,
     pair: "MNTA / MNTB",
     token0: "MNTA",
@@ -26,6 +28,7 @@ export const mockPools: Pool[] = [
     volume: "41.08K",
   },
   {
+    id: "MNTA-MNTC-2",
     index: 2,
     pair: "MNTA / MNTC",
     token0: "MNTA",
@@ -38,6 +41,7 @@ export const mockPools: Pool[] = [
     volume: "0.00",
   },
   {
+    id: "MNTB-MNTD-3",
     index: 3,
     pair: "MNTB / MNTD",
     token0: "MNTB",
@@ -50,6 +54,7 @@ export const mockPools: Pool[] = [
     volume: "9.72K",
   },
   {
+    id: "MNTC-MNTD-4",
     index: 4,
     pair: "MNTC / MNTD",
     token0: "MNTC",

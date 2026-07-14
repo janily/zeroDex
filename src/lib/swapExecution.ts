@@ -9,6 +9,7 @@ export type ExactInputSwapPayload = {
   poolIndex: number;
   amountIn: bigint;
   amountOutMinimum: bigint;
+  sqrtPriceLimitX96: bigint;
 };
 
 export type ExactOutputSwapPayload = {
@@ -19,6 +20,7 @@ export type ExactOutputSwapPayload = {
   poolIndex: number;
   amountOut: bigint;
   amountInMaximum: bigint;
+  sqrtPriceLimitX96: bigint;
 };
 
 export type SwapExecutionPayload = ExactInputSwapPayload | ExactOutputSwapPayload;
@@ -45,6 +47,7 @@ export function buildSwapExecution(input: SwapExecutionInput): SwapExecutionPayl
       poolIndex: input.quote.pool.index,
       amountIn: input.amountIn,
       amountOutMinimum: applyNegativeSlippage(input.quote.amountOut, input.slippageBps),
+      sqrtPriceLimitX96: input.quote.sqrtPriceLimitX96,
     };
   }
 
@@ -56,6 +59,7 @@ export function buildSwapExecution(input: SwapExecutionInput): SwapExecutionPayl
     poolIndex: input.quote.pool.index,
     amountOut: input.amountOut,
     amountInMaximum: applyPositiveSlippage(input.quote.amountIn, input.slippageBps),
+    sqrtPriceLimitX96: input.quote.sqrtPriceLimitX96,
   };
 }
 
