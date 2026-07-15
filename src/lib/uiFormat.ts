@@ -1,6 +1,6 @@
-import { TOKENS } from "../config/tokens";
+import { getTokenByAddress, TOKENS } from "../config/tokens";
 import { feeToPercent } from "./price";
-import { parseTokenAmount } from "./amount";
+import { formatTokenAmount, parseTokenAmount } from "./amount";
 import type { DisplayPool } from "../types/domain";
 import type { Pool, Position, PositionStatus } from "../types/ui";
 
@@ -21,7 +21,7 @@ export function displayPoolToUiPool(pool: DisplayPool): Pool {
     range: `${pool.tickLower.toString()} - ${pool.tickUpper.toString()} ticks`,
     liquidity: Number(pool.liquidity > BigInt(Number.MAX_SAFE_INTEGER) ? BigInt(Number.MAX_SAFE_INTEGER) : pool.liquidity),
     status: pool.status,
-    volume: "chain",
+    volume: "Not indexed",
   };
 }
 
@@ -38,24 +38,28 @@ export function safeParseSwapAmount(value: string, tokenAddress: string) {
     const token = TOKENS.find((item) => item.address.toLowerCase() === tokenAddress.toLowerCase());
     return parseTokenAmount(value, token?.decimals ?? 18);
   } catch {
-    return 0n;
+    return undefined;
   }
 }
 
 export function positionDetailsToUiPosition(position: { id: string; raw: unknown }): Position {
   const raw = position.raw as Record<string, unknown>;
+  const owner = String(raw.owner ?? "");
+  const token0 = getTokenByAddress(String(raw.token0 ?? ""));
+  const token1 = getTokenByAddress(String(raw.token1 ?? ""));
   const liquidity = BigInt((raw.liquidity as bigint | string | number | undefined) ?? 0);
   const owed0 = BigInt((raw.tokensOwed0 as bigint | string | number | undefined) ?? 0);
   const owed1 = BigInt((raw.tokensOwed1 as bigint | string | number | undefined) ?? 0);
-  const status: PositionStatus = owed0 > 0n || owed1 > 0n ? "Collectable" : liquidity > 0n ? "Active" : "Closed";
+  const status: PositionStatus = liquidity > 0n ? "Active" : owed0 > 0n || owed1 > 0n ? "Collectable" : "Closed";
   return {
     id: `#${position.id}`,
-    pair: "PositionManager NFT",
+    owner: owner || undefined,
+    pair: token0 && token1 ? `${token0.symbol} / ${token1.symbol}` : "Unknown token pair",
     poolIndex: Number((raw.index as bigint | string | number | undefined) ?? 0),
     range: `${String(raw.tickLower ?? "-")} - ${String(raw.tickUpper ?? "-")}`,
     liquidity: liquidity.toString(),
-    owed0: owed0.toString(),
-    owed1: owed1.toString(),
+    owed0: token0 ? `${formatTokenAmount(owed0, token0.decimals)} ${token0.symbol}` : owed0.toString(),
+    owed1: token1 ? `${formatTokenAmount(owed1, token1.decimals)} ${token1.symbol}` : owed1.toString(),
     status,
   };
 }

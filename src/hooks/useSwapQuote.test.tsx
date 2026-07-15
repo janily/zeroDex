@@ -47,8 +47,6 @@ describe("useSwapQuote", () => {
           tokenOut: TOKENS[1].address,
           mode: "exact-input",
           amountIn,
-          account: TOKENS[0].address,
-          slippageBps: 50n,
         }),
       { initialProps: { amountIn: 10n } },
     );
@@ -79,8 +77,6 @@ describe("useSwapQuote", () => {
         tokenOut: TOKENS[1].address,
         mode: "exact-input",
         amountIn: 10n,
-        account: TOKENS[0].address,
-        slippageBps: 50n,
       }),
     );
 
@@ -98,5 +94,34 @@ describe("useSwapQuote", () => {
         sqrtPriceLimitX96: expect.any(BigInt),
       }),
     );
+  });
+
+  it("clears a previous quote instead of quoting an empty amount", async () => {
+    const quoteExactInput = vi.fn(async () => 12n);
+    vi.mocked(getReadContracts).mockReturnValue({
+      swapRouter: {
+        quoteExactInput: { staticCall: quoteExactInput },
+      },
+    } as unknown as ReturnType<typeof getReadContracts>);
+
+    const { result, rerender } = renderHook(
+      ({ amountIn }) =>
+        useSwapQuote({
+          enabled: true,
+          pools: [pool(1)],
+          tokenIn: TOKENS[0].address,
+          tokenOut: TOKENS[1].address,
+          mode: "exact-input",
+          amountIn,
+        }),
+      { initialProps: { amountIn: 10n } },
+    );
+
+    await waitFor(() => expect(result.current.quote?.amountOut).toBe(12n));
+    rerender({ amountIn: 0n });
+    await waitFor(() => expect(result.current.quote).toBeUndefined());
+
+    expect(quoteExactInput).toHaveBeenCalledTimes(1);
+    expect(result.current.loading).toBe(false);
   });
 });

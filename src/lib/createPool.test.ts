@@ -42,13 +42,36 @@ describe("create pool params", () => {
     expect(params.token0.toLowerCase()).toBe(TOKENS[0].address.toLowerCase());
     expect(params.token1.toLowerCase()).toBe(TOKENS[1].address.toLowerCase());
     expect(params.fee).toBe(3000);
+    expect(params.tickLower).toBe(priceToTick(1 / 1.5));
+    expect(params.tickUpper).toBe(priceToTick(1 / 1.0));
+    expect(params.sqrtPriceX96).toBeGreaterThan(0n);
+  });
+
+  it("keeps user rates when token A is already token0", () => {
+    const params = buildCreatePoolParams({
+      tokenA: TOKENS[0].address,
+      tokenB: TOKENS[1].address,
+      feePercent: "0.30%",
+      initialRate: "1.2",
+      minRate: "1.0",
+      maxRate: "1.5",
+    });
+
     expect(params.tickLower).toBe(priceToTick(1.0));
     expect(params.tickUpper).toBe(priceToTick(1.5));
-    expect(params.sqrtPriceX96).toBeGreaterThan(0n);
   });
 
   it("converts percent fee to hundredths of a bip", () => {
     expect(feePercentToUnits("0.05%")).toBe(500);
     expect(feePercentToUnits("1.00")).toBe(10000);
+  });
+
+  it("rejects positive fees that round down to zero contract units", () => {
+    expect(() => feePercentToUnits("0.000001%")).toThrow("below the contract precision");
+  });
+
+  it("rejects fees and prices outside the contract ranges", () => {
+    expect(() => feePercentToUnits("2000%")).toThrow("uint24");
+    expect(() => priceToTick(1e100)).toThrow("tick range");
   });
 });

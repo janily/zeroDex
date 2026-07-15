@@ -29,6 +29,6 @@ export type PositionSubmitPayload = {
 };
 
 export type TransactionPayload = DrawerSubmitPayload | PositionSubmitPayload;
-export type TransactionKind = "approve" | "swap" | "mint" | "collect" | "burn" | "create";
+export type TransactionKind = "swap" | "mint" | "collect" | "burn" | "create";
 export type RunTransaction = (kind: TransactionKind, payload?: TransactionPayload) => Promise<void>;
 export type OpenDrawer = (drawer: DrawerType) => void;

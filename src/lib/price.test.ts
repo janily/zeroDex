@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { TOKENS } from "../config/tokens";
 import type { DisplayPool } from "../types/domain";
-import { derivePoolStatus, feeToPercent, formatRange, formatRate, getSwapPriceLimit, sortTokenAddresses, tickToSqrtPriceX96 } from "./price";
+import {
+  derivePoolStatus,
+  feeToPercent,
+  formatRange,
+  formatRate,
+  getSwapPriceLimit,
+  getSwapPriceLimitForPools,
+  sortTokenAddresses,
+  tickToSqrtPriceX96,
+} from "./price";
 
 describe("price utilities", () => {
   it("sorts token addresses lexicographically", () => {
@@ -39,5 +48,26 @@ describe("price utilities", () => {
 
     expect(getSwapPriceLimit(pool, TOKENS[0].address)).toBe(tickToSqrtPriceX96(pool.tickLower));
     expect(getSwapPriceLimit(pool, TOKENS[1].address)).toBe(tickToSqrtPriceX96(pool.tickUpper));
+  });
+
+  it("uses the shared reachable boundary for a multi-pool path", () => {
+    const first: DisplayPool = {
+      token0: TOKENS[0], token1: TOKENS[1], index: 1, fee: 3000,
+      tickLower: -100n, tickUpper: 100n, tick: 0n, sqrtPriceX96: 1n, liquidity: 100n, status: "Tradable",
+    };
+    const second = { ...first, index: 2, tickLower: -50n, tickUpper: 80n, tick: 10n };
+
+    expect(getSwapPriceLimitForPools([first, second], TOKENS[0].address)).toBe(tickToSqrtPriceX96(-50n));
+    expect(getSwapPriceLimitForPools([first, second], TOKENS[1].address)).toBe(tickToSqrtPriceX96(80n));
+  });
+
+  it("rejects a path whose pools have no shared reachable price limit", () => {
+    const first: DisplayPool = {
+      token0: TOKENS[0], token1: TOKENS[1], index: 1, fee: 3000,
+      tickLower: -100n, tickUpper: 100n, tick: -80n, sqrtPriceX96: 1n, liquidity: 100n, status: "Tradable",
+    };
+    const second = { ...first, index: 2, tickLower: -50n, tickUpper: 80n, tick: 0n };
+
+    expect(getSwapPriceLimitForPools([first, second], TOKENS[0].address)).toBeUndefined();
   });
 });

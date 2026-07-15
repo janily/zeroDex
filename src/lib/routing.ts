@@ -2,10 +2,21 @@ import type { Address, DisplayPool, SwapMode } from "../types/domain";
 
 export type QuoteResult = {
   pool: DisplayPool;
+  pools: DisplayPool[];
+  indexPath: number[];
   amountIn: bigint;
   amountOut: bigint;
   sqrtPriceLimitX96: bigint;
 };
+
+export function getCandidateRoutes(candidates: DisplayPool[]): DisplayPool[][] {
+  if (candidates.length <= 1) return candidates.map((pool) => [pool]);
+  const byLiquidity = [...candidates].sort((a, b) => (a.liquidity === b.liquidity ? a.index - b.index : a.liquidity > b.liquidity ? -1 : 1));
+  return [
+    ...candidates.map((pool) => [pool]),
+    ...candidates.map((first) => [first, ...byLiquidity.filter((pool) => pool.index !== first.index)]),
+  ];
+}
 
 export function isSamePair(pool: DisplayPool, tokenIn: Address, tokenOut: Address): boolean {
   const selected = [tokenIn.toLowerCase(), tokenOut.toLowerCase()].sort();

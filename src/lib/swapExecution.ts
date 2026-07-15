@@ -6,7 +6,7 @@ export type ExactInputSwapPayload = {
   mode: "exact-input";
   tokenIn: Address;
   tokenOut: Address;
-  poolIndex: number;
+  poolIndices: number[];
   amountIn: bigint;
   amountOutMinimum: bigint;
   sqrtPriceLimitX96: bigint;
@@ -17,7 +17,7 @@ export type ExactOutputSwapPayload = {
   mode: "exact-output";
   tokenIn: Address;
   tokenOut: Address;
-  poolIndex: number;
+  poolIndices: number[];
   amountOut: bigint;
   amountInMaximum: bigint;
   sqrtPriceLimitX96: bigint;
@@ -44,7 +44,7 @@ export function buildSwapExecution(input: SwapExecutionInput): SwapExecutionPayl
       mode: "exact-input",
       tokenIn: input.tokenIn,
       tokenOut: input.tokenOut,
-      poolIndex: input.quote.pool.index,
+      poolIndices: input.quote.indexPath,
       amountIn: input.amountIn,
       amountOutMinimum: applyNegativeSlippage(input.quote.amountOut, input.slippageBps),
       sqrtPriceLimitX96: input.quote.sqrtPriceLimitX96,
@@ -56,7 +56,7 @@ export function buildSwapExecution(input: SwapExecutionInput): SwapExecutionPayl
     mode: "exact-output",
     tokenIn: input.tokenIn,
     tokenOut: input.tokenOut,
-    poolIndex: input.quote.pool.index,
+    poolIndices: input.quote.indexPath,
     amountOut: input.amountOut,
     amountInMaximum: applyPositiveSlippage(input.quote.amountIn, input.slippageBps),
     sqrtPriceLimitX96: input.quote.sqrtPriceLimitX96,
@@ -68,5 +68,6 @@ function applyNegativeSlippage(value: bigint, slippageBps: bigint): bigint {
 }
 
 function applyPositiveSlippage(value: bigint, slippageBps: bigint): bigint {
-  return (value * (10_000n + slippageBps)) / 10_000n;
+  const numerator = value * (10_000n + slippageBps);
+  return (numerator + 9_999n) / 10_000n;
 }

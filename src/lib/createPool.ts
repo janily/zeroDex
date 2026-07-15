@@ -33,11 +33,18 @@ export function feePercentToUnits(value: string): number {
   if (!Number.isFinite(percent) || percent <= 0) {
     throw new Error("Fee must be a positive percent");
   }
-  return Math.round(percent * 10_000);
+  const fee = Math.round(percent * 10_000);
+  if (fee <= 0) throw new Error("Fee is below the contract precision");
+  if (fee > 0xff_ffff) throw new Error("Fee exceeds the uint24 contract limit");
+  return fee;
 }
 
 export function priceToTick(price: number): number {
-  return Math.floor(Math.log(price) / Math.log(1.0001));
+  const tick = Math.floor(Math.log(price) / Math.log(1.0001));
+  if (!Number.isSafeInteger(tick) || tick < -887272 || tick > 887272) {
+    throw new Error("Price is outside the supported tick range");
+  }
+  return tick;
 }
 
 export function priceToSqrtPriceX96(price: number): bigint {
@@ -62,12 +69,16 @@ export function buildCreatePoolParams(input: CreatePoolInput): CreatePoolParams 
   }
 
   const [token0, token1] = sortTokenAddresses(input.tokenA, input.tokenB);
+  const tokenOrderChanged = token0.toLowerCase() !== input.tokenA.toLowerCase();
+  const normalizedMinRate = tokenOrderChanged ? 1 / maxRate : minRate;
+  const normalizedInitialRate = tokenOrderChanged ? 1 / initialRate : initialRate;
+  const normalizedMaxRate = tokenOrderChanged ? 1 / minRate : maxRate;
   return {
     token0,
     token1,
     fee: feePercentToUnits(input.feePercent),
-    tickLower: priceToTick(minRate),
-    tickUpper: priceToTick(maxRate),
-    sqrtPriceX96: priceToSqrtPriceX96(initialRate),
+    tickLower: priceToTick(normalizedMinRate),
+    tickUpper: priceToTick(normalizedMaxRate),
+    sqrtPriceX96: priceToSqrtPriceX96(normalizedInitialRate),
   };
 }

@@ -246,6 +246,18 @@ p {
   font-weight: 650;
 }
 
+.primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.action-hint {
+  margin: 8px 0 0;
+  color: #aeb4c2;
+  font-size: 12px;
+  text-align: center;
+}
+
 .secondary-button {
   background: #171b24;
   color: #e4e7ed;
@@ -601,7 +613,7 @@ p {
 }
 
 .token-amount input,
-.token-amount button {
+.token-amount .token-badge {
   min-height: 44px;
   border: 1px solid #2c3240;
   border-radius: 8px;
@@ -616,7 +628,14 @@ p {
   font-size: 20px;
 }
 
-.token-amount button {
+.token-amount input:read-only {
+  color: #d8dde8;
+  cursor: default;
+}
+
+.token-amount .token-badge {
+  display: grid;
+  place-items: center;
   font-weight: 650;
 }
 

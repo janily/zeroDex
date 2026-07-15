@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getReadContracts } from "../lib/contracts";
-import { getSwapPriceLimit } from "../lib/price";
-import { getCandidatePools, selectBestQuote, type QuoteResult } from "../lib/routing";
+import { getSwapPriceLimitForPools } from "../lib/price";
+import { getCandidatePools, getCandidateRoutes, selectBestQuote, type QuoteResult } from "../lib/routing";
 import type { Address, DisplayPool, SwapMode } from "../types/domain";
 import "../types/ethereum";
 
@@ -21,10 +21,8 @@ export function useSwapQuote(input: {
   mode: SwapMode;
   amountIn?: bigint;
   amountOut?: bigint;
-  account?: Address;
-  slippageBps: bigint;
 }): SwapQuoteState {
-  const { enabled, pools, tokenIn, tokenOut, mode, amountIn, amountOut, account, slippageBps } = input;
+  const { enabled, pools, tokenIn, tokenOut, mode, amountIn, amountOut } = input;
   const [quote, setQuote] = useState<QuoteResult | undefined>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -36,6 +34,11 @@ export function useSwapQuote(input: {
         pool.token0.address.toLowerCase(),
         pool.token1.address.toLowerCase(),
         pool.status,
+        pool.fee,
+        pool.tickLower.toString(),
+        pool.tickUpper.toString(),
+        pool.tick.toString(),
+        pool.sqrtPriceX96.toString(),
         pool.liquidity.toString(),
       ].join(":"),
     )
@@ -49,22 +52,27 @@ export function useSwapQuote(input: {
   const refresh = useCallback(async () => {
     const currentRequest = requestId.current + 1;
     requestId.current = currentRequest;
+    const quoteAmount = mode === "exact-input" ? amountIn : amountOut;
 
-    if (!enabled || !window.ethereum || !tokenIn || !tokenOut || candidates.length === 0) {
+    if (!enabled || !window.ethereum || !tokenIn || !tokenOut || candidates.length === 0 || quoteAmount === undefined || quoteAmount <= 0n) {
       setQuote(undefined);
       setError(undefined);
       setLoading(false);
       return;
     }
 
+    setQuote(undefined);
     setLoading(true);
     setError(undefined);
     try {
       const contracts = getReadContracts(window.ethereum);
+      const routes = getCandidateRoutes(candidates)
+        .map((pools) => ({ pools, sqrtPriceLimitX96: getSwapPriceLimitForPools(pools, tokenIn) }))
+        .filter((route): route is { pools: DisplayPool[]; sqrtPriceLimitX96: bigint } => route.sqrtPriceLimitX96 !== undefined);
       const settledQuotes = await Promise.allSettled(
-        candidates.map(async (pool) => {
-          const indexPath = [pool.index];
-          const sqrtPriceLimitX96 = getSwapPriceLimit(pool, tokenIn);
+        routes.map(async ({ pools: routePools, sqrtPriceLimitX96 }) => {
+          const pool = routePools[0];
+          const indexPath = routePools.map((candidate) => candidate.index);
           if (mode === "exact-input") {
             const quotedAmountIn = amountIn ?? 0n;
             const quotedAmountOut = BigInt(
@@ -76,7 +84,7 @@ export function useSwapQuote(input: {
                 sqrtPriceLimitX96,
               }),
             );
-            return { pool, amountIn: quotedAmountIn, amountOut: quotedAmountOut, sqrtPriceLimitX96 };
+            return { pool, pools: routePools, indexPath, amountIn: quotedAmountIn, amountOut: quotedAmountOut, sqrtPriceLimitX96 };
           }
 
           const quotedAmountOut = amountOut ?? 0n;
@@ -89,7 +97,7 @@ export function useSwapQuote(input: {
               sqrtPriceLimitX96,
             }),
           );
-          return { pool, amountIn: quotedAmountIn, amountOut: quotedAmountOut, sqrtPriceLimitX96 };
+          return { pool, pools: routePools, indexPath, amountIn: quotedAmountIn, amountOut: quotedAmountOut, sqrtPriceLimitX96 };
         }),
       );
 
@@ -111,8 +119,22 @@ export function useSwapQuote(input: {
   }, [amountIn, amountOut, candidates, enabled, mode, tokenIn, tokenOut]);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    const quoteAmount = mode === "exact-input" ? amountIn : amountOut;
+    const canQuote =
+      enabled &&
+      Boolean(window.ethereum && tokenIn && tokenOut && candidates.length > 0 && quoteAmount !== undefined && quoteAmount > 0n);
+    if (!canQuote) {
+      void refresh();
+      return;
+    }
+
+    requestId.current += 1;
+    setQuote(undefined);
+    setError(undefined);
+    setLoading(true);
+    const timeout = window.setTimeout(() => void refresh(), 200);
+    return () => window.clearTimeout(timeout);
+  }, [amountIn, amountOut, candidates.length, enabled, mode, refresh, tokenIn, tokenOut]);
 
   return useMemo(() => ({ quote, candidates, loading, error, refresh }), [candidates, error, loading, quote, refresh]);
 }

@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TOKENS } from "../config/tokens";
 import { getReadContracts } from "../lib/contracts";
 import { normalizePool } from "../lib/pool";
 import type { Address, DisplayPool, PoolInfo } from "../types/domain";
 import "../types/ethereum";
 
-type TokenBalance = {
+export type TokenBalance = {
   token: Address;
   value: bigint;
 };
@@ -37,8 +37,11 @@ export function useDexData(account?: Address, enabled = false): DexDataState {
   const [balances, setBalances] = useState<TokenBalance[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const requestId = useRef(0);
 
   const refresh = useCallback(async () => {
+    const currentRequest = requestId.current + 1;
+    requestId.current = currentRequest;
     if (!enabled || !window.ethereum) {
       setPools([]);
       setBalances([]);
@@ -49,26 +52,41 @@ export function useDexData(account?: Address, enabled = false): DexDataState {
 
     setLoading(true);
     setError(undefined);
+    setPools([]);
+    setBalances([]);
     try {
       const contracts = getReadContracts(window.ethereum);
       const rawPools = (await contracts.poolManager.getAllPools()) as Record<string, unknown>[];
       const normalizedPools = rawPools.map((pool) => normalizePool(toPoolInfo(pool))).filter((pool): pool is DisplayPool => Boolean(pool));
+      if (requestId.current !== currentRequest) return;
       setPools(normalizedPools);
 
       if (account) {
-        const nextBalances = await Promise.all(
+        const settledBalances = await Promise.allSettled(
           TOKENS.map(async (token) => ({
             token: token.address,
             value: BigInt(await contracts.erc20(token.address).balanceOf(account)),
           })),
         );
+        if (requestId.current !== currentRequest) return;
+        const nextBalances: TokenBalance[] = [];
+        for (const result of settledBalances) {
+          if (result.status === "fulfilled") nextBalances.push(result.value);
+        }
         setBalances(nextBalances);
+        if (nextBalances.length !== TOKENS.length) {
+          setError(`Unable to read ${TOKENS.length - nextBalances.length} token balance(s)`);
+        }
       } else {
         setBalances([]);
       }
     } catch (caught) {
+      if (requestId.current !== currentRequest) return;
+      setPools([]);
+      setBalances([]);
       setError(caught instanceof Error ? caught.message : "Unable to load chain data");
     } finally {
+      if (requestId.current !== currentRequest) return;
       setLoading(false);
     }
   }, [account, enabled]);

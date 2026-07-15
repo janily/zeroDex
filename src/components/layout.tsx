@@ -1,12 +1,12 @@
 import { Activity, ArrowDownUp, Database, ExternalLink, Layers3, Plus, RefreshCw, Wallet } from "lucide-react";
 import { TOKENS } from "../config/tokens";
+import type { TokenBalance } from "../hooks/useDexData";
 import type { WalletStatus } from "../hooks/useWallet";
+import { formatTokenAmount } from "../lib/amount";
 import type { OpenDrawer } from "../types/app";
 import type { TransactionStage } from "../types/domain";
 import type { Page, Pool } from "../types/ui";
-import { Metric, TxTimeline } from "./common";
-
-const tokens = TOKENS.map((token) => token.symbol);
+import { TxTimeline } from "./common";
 
 export function Sidebar({ page, setPage }: { page: Page; setPage: (page: Page) => void }) {
   const items = [
@@ -43,9 +43,9 @@ export function Sidebar({ page, setPage }: { page: Page; setPage: (page: Page) =
       <div className="sidebar-footer">
         <span className="label">Contracts</span>
         <code>11155111</code>
-        <button className="ghost-button">
+        <a className="ghost-button" href="https://sepolia.etherscan.io" target="_blank" rel="noreferrer">
           Etherscan <ExternalLink size={14} />
-        </button>
+        </a>
       </div>
     </aside>
   );
@@ -57,12 +57,16 @@ export function Topbar({
   error,
   connect,
   switchToSepolia,
+  refresh,
+  refreshing,
 }: {
   account?: string;
   status: WalletStatus;
   error?: string;
   connect: () => Promise<void>;
   switchToSepolia: () => Promise<void>;
+  refresh: () => Promise<void>;
+  refreshing: boolean;
 }) {
   const label = getWalletLabel(status, account);
   const action = status === "wrong-network" ? switchToSepolia : connect;
@@ -74,7 +78,7 @@ export function Topbar({
         {error && <p className="topbar-error">{error}</p>}
       </div>
       <div className="topbar-actions">
-        <button className="icon-button" title="Refresh chain data">
+        <button className="icon-button" title="Refresh chain data" onClick={() => void refresh()} disabled={refreshing}>
           <RefreshCw size={16} />
         </button>
         <button className={`wallet-button ${walletClass(status)}`} onClick={() => void action()}>
@@ -90,10 +94,16 @@ export function ContextPanel({
   selectedPool,
   txStage,
   openDrawer,
+  balances,
+  balancesLoading,
+  isReady,
 }: {
   selectedPool: Pool;
   txStage: TransactionStage;
   openDrawer: OpenDrawer;
+  balances: TokenBalance[];
+  balancesLoading: boolean;
+  isReady: boolean;
 }) {
   return (
     <aside className="context-panel">
@@ -103,15 +113,18 @@ export function ContextPanel({
         <p>{selectedPool.price}. Liquidity can only be added inside the fixed pool range.</p>
       </div>
       <div className="balance-list">
-        {tokens.map((token, index) => (
-          <div key={token}>
-            <span>{token}</span>
-            <strong>{[1260.42, 891.03, 342.19, 4207.88][index].toLocaleString()}</strong>
+        {TOKENS.map((token) => {
+          const balance = balances.find((item) => item.token.toLowerCase() === token.address.toLowerCase())?.value;
+          return (
+          <div key={token.address}>
+            <span>{token.symbol}</span>
+            <strong>{balance !== undefined ? formatTokenAmount(balance, token.decimals) : balancesLoading ? "Loading..." : "—"}</strong>
           </div>
-        ))}
+          );
+        })}
       </div>
       <TxTimeline stage={txStage} compact />
-      <button className="primary-button wide" onClick={() => openDrawer("liquidity")}>
+      <button className="primary-button wide" onClick={() => openDrawer("liquidity")} disabled={!isReady}>
         <Plus size={16} /> Mint position
       </button>
     </aside>

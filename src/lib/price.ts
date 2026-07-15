@@ -36,3 +36,13 @@ export function getSwapPriceLimit(pool: DisplayPool, tokenIn: Address): bigint {
   const zeroForOne = tokenIn.toLowerCase() === pool.token0.address.toLowerCase();
   return tickToSqrtPriceX96(zeroForOne ? pool.tickLower : pool.tickUpper);
 }
+
+export function getSwapPriceLimitForPools(pools: DisplayPool[], tokenIn: Address): bigint | undefined {
+  if (pools.length === 0) return undefined;
+  const zeroForOne = tokenIn.toLowerCase() === pools[0].token0.address.toLowerCase();
+  const limitTick = zeroForOne
+    ? pools.reduce((limit, pool) => (pool.tickLower > limit ? pool.tickLower : limit), pools[0].tickLower)
+    : pools.reduce((limit, pool) => (pool.tickUpper < limit ? pool.tickUpper : limit), pools[0].tickUpper);
+  const compatible = pools.every((pool) => (zeroForOne ? limitTick < pool.tick : limitTick > pool.tick));
+  return compatible ? tickToSqrtPriceX96(limitTick) : undefined;
+}

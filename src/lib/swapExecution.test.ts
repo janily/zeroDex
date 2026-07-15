@@ -27,7 +27,7 @@ describe("buildSwapExecution", () => {
         tokenOut: tokenB,
         amountIn: 1000n,
         amountOut: 0n,
-        quote: { pool, amountIn: 1000n, amountOut: 500n, sqrtPriceLimitX96: 123n },
+        quote: { pool, pools: [pool], indexPath: [7], amountIn: 1000n, amountOut: 500n, sqrtPriceLimitX96: 123n },
         slippageBps: 50n,
       }),
     ).toEqual({
@@ -35,7 +35,7 @@ describe("buildSwapExecution", () => {
       mode: "exact-input",
       tokenIn: tokenA,
       tokenOut: tokenB,
-      poolIndex: 7,
+      poolIndices: [7],
       amountIn: 1000n,
       amountOutMinimum: 497n,
       sqrtPriceLimitX96: 123n,
@@ -50,7 +50,7 @@ describe("buildSwapExecution", () => {
         tokenOut: tokenA,
         amountIn: 0n,
         amountOut: 500n,
-        quote: { pool, amountIn: 1000n, amountOut: 500n, sqrtPriceLimitX96: 456n },
+        quote: { pool, pools: [pool], indexPath: [7], amountIn: 1000n, amountOut: 500n, sqrtPriceLimitX96: 456n },
         slippageBps: 50n,
       }),
     ).toEqual({
@@ -58,10 +58,24 @@ describe("buildSwapExecution", () => {
       mode: "exact-output",
       tokenIn: tokenB,
       tokenOut: tokenA,
-      poolIndex: 7,
+      poolIndices: [7],
       amountOut: 500n,
       amountInMaximum: 1005n,
       sqrtPriceLimitX96: 456n,
     });
+  });
+
+  it("rounds exact-output maximum input up to avoid a one-wei shortfall", () => {
+    expect(
+      buildSwapExecution({
+        mode: "exact-output",
+        tokenIn: tokenB,
+        tokenOut: tokenA,
+        amountIn: 0n,
+        amountOut: 1n,
+        quote: { pool, pools: [pool], indexPath: [7], amountIn: 1n, amountOut: 1n, sqrtPriceLimitX96: 456n },
+        slippageBps: 50n,
+      }),
+    ).toMatchObject({ amountInMaximum: 2n });
   });
 });

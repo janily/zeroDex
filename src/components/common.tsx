@@ -44,20 +44,22 @@ export function TokenAmount({
   token,
   value,
   onChange,
+  helper = "Balance unavailable",
 }: {
   label: string;
   token: string;
   value: string;
-  onChange: (value: string) => void;
+  onChange?: (value: string) => void;
+  helper?: string;
 }) {
   return (
     <label className="token-amount">
       <span>{label}</span>
       <div>
-        <input value={value} onChange={(event) => onChange(event.target.value)} />
-        <button type="button">{token}</button>
+        <input value={value} onChange={(event) => onChange?.(event.target.value)} readOnly={!onChange} />
+        <span className="token-badge">{token}</span>
       </div>
-      <small>Balance 1,260.42</small>
+      <small>{helper}</small>
     </label>
   );
 }
@@ -69,8 +71,7 @@ export function TxTimeline({ stage, compact = false }: { stage: TransactionStage
     ["confirming", "Confirm"],
     ["success", "Complete"],
   ] as const;
-  const order = ["idle", "waiting-signature", "submitted", "confirming", "success", "rejected", "error"];
-  const activeIndex = Math.max(0, order.indexOf(stage));
+  const activeIndex = ["waiting-signature", "submitted", "confirming", "success"].indexOf(stage) + 1;
 
   return (
     <div className={`tx-timeline ${compact ? "compact" : ""}`}>
@@ -79,7 +80,7 @@ export function TxTimeline({ stage, compact = false }: { stage: TransactionStage
         const current = stage === key;
         return (
           <div className={`tx-step ${active ? "active" : ""} ${current ? "current" : ""}`} key={key}>
-            <span>{current ? <Loader2 size={13} /> : active ? <Check size={13} /> : index + 1}</span>
+            <span>{current && key !== "success" ? <Loader2 size={13} /> : active ? <Check size={13} /> : index + 1}</span>
             <strong>{label}</strong>
           </div>
         );

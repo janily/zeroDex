@@ -1,6 +1,6 @@
-import { ArrowDownUp, ChevronDown, Database, Filter, Loader2, Plus, Search, ShieldCheck, X } from "lucide-react";
+import { ArrowDownUp, ChevronDown, Database, Filter, Loader2, Plus, Search, X } from "lucide-react";
 import { formatNumber } from "../lib/uiFormat";
-import type { OpenDrawer, RunTransaction } from "../types/app";
+import type { OpenDrawer } from "../types/app";
 import type { Pool } from "../types/ui";
 import { Metric, StatusPill } from "../components/common";
 
@@ -15,21 +15,23 @@ export function PoolsPage(props: {
   selectedPool: Pool;
   setSelectedPoolId: (id: string) => void;
   openDrawer: OpenDrawer;
-  runTransaction: RunTransaction;
   isReady: boolean;
   chainLoading: boolean;
   chainError?: string;
   refreshChainData: () => Promise<void>;
+  onSwapPool: (pool: Pool) => void;
+  hasSelectedChainPool: boolean;
 }) {
   return (
     <div className="page-grid">
       <section className="main-column">
+        {!props.isReady && <div className="chain-banner"><Database size={16} /><div><strong>Chain data paused</strong><span>Connect a Sepolia wallet to load pools and balances.</span></div></div>}
         <div className="section-header">
           <div>
             <h2>Pools</h2>
             <p>All MetaNodeSwap pools, grouped by token pair, fee, range and current state.</p>
           </div>
-          <button className="primary-button" onClick={() => props.openDrawer("create")}>
+          <button className="primary-button" onClick={() => props.openDrawer("create")} disabled={!props.isReady}>
             <Plus size={16} /> Create pool
           </button>
         </div>
@@ -37,7 +39,7 @@ export function PoolsPage(props: {
           <div className={props.chainError ? "inline-error compact-error" : "chain-banner"}>
             {props.chainError ? <X size={16} /> : <Loader2 size={16} />}
             <div>
-              <strong>{props.chainError ? "Chain data unavailable" : "Loading Sepolia data"}</strong>
+              <strong>{props.chainError ? "Chain data warning" : "Loading Sepolia data"}</strong>
               <span>{props.chainError ?? "Reading PoolManager.getAllPools and ERC20 balances."}</span>
             </div>
             {props.chainError && (
@@ -67,10 +69,10 @@ export function PoolsPage(props: {
             Hide empty
           </button>
         </div>
-        <PoolTable pools={props.pools} selectedPool={props.selectedPool} setSelectedPoolId={props.setSelectedPoolId} />
+        <PoolTable pools={props.pools} selectedPool={props.selectedPool} setSelectedPoolId={props.setSelectedPoolId} isReady={props.isReady} />
       </section>
       <section className="detail-column">
-        <PoolDetail pool={props.selectedPool} openDrawer={props.openDrawer} runTransaction={props.runTransaction} isReady={props.isReady} />
+        <PoolDetail pool={props.selectedPool} openDrawer={props.openDrawer} onSwapPool={props.onSwapPool} isReady={props.isReady && props.hasSelectedChainPool} />
       </section>
     </div>
   );
@@ -80,10 +82,12 @@ function PoolTable({
   pools,
   selectedPool,
   setSelectedPoolId,
+  isReady,
 }: {
   pools: Pool[];
   selectedPool: Pool;
   setSelectedPoolId: (id: string) => void;
+  isReady: boolean;
 }) {
   return (
     <div className="table-surface">
@@ -99,8 +103,8 @@ function PoolTable({
       {pools.length === 0 ? (
         <div className="empty-state">
           <Database size={24} />
-          <strong>No pools match this filter</strong>
-          <span>Adjust token pair, fee, or include empty pools.</span>
+          <strong>{isReady ? "No pools found" : "Connect wallet to load pools"}</strong>
+          <span>{isReady ? "Adjust the filters or create the first pool for this pair." : "Pool data is read directly from Sepolia."}</span>
         </div>
       ) : (
         pools.map((pool) => (
@@ -126,14 +130,26 @@ function PoolTable({
 function PoolDetail({
   pool,
   openDrawer,
-  runTransaction,
+  onSwapPool,
   isReady,
 }: {
   pool: Pool;
   openDrawer: OpenDrawer;
-  runTransaction: RunTransaction;
+  onSwapPool: (pool: Pool) => void;
   isReady: boolean;
 }) {
+  if (!isReady) {
+    return (
+      <div className="detail-surface">
+        <div className="empty-state">
+          <Database size={24} />
+          <strong>No on-chain pool selected</strong>
+          <span>Connect to Sepolia and select a pool to view its details.</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="detail-surface">
       <div className="detail-title">
@@ -147,7 +163,7 @@ function PoolDetail({
         <Metric label="Pool index" value={`#${pool.index}`} />
         <Metric label="Fee tier" value={pool.fee} />
         <Metric label="Liquidity" value={formatNumber(pool.liquidity)} />
-        <Metric label="24h simulated volume" value={pool.volume} />
+        <Metric label="24h volume" value={pool.volume} />
       </div>
       <div className="range-band">
         <div className="range-track">
@@ -161,14 +177,11 @@ function PoolDetail({
         </div>
       </div>
       <div className="stacked-actions">
-        <button className="primary-button wide" onClick={() => openDrawer("liquidity")}>
+        <button className="primary-button wide" onClick={() => openDrawer("liquidity")} disabled={!isReady}>
           <Plus size={16} /> Add liquidity
         </button>
-        <button className="secondary-button wide" onClick={() => openDrawer("swap")}>
+        <button className="secondary-button wide" onClick={() => onSwapPool(pool)} disabled={!isReady}>
           <ArrowDownUp size={16} /> Swap through this pool
-        </button>
-        <button className="ghost-button wide" onClick={() => runTransaction("approve")}>
-          <ShieldCheck size={16} /> {isReady ? "Check allowances" : "Connect before write"}
         </button>
       </div>
     </div>

@@ -96,11 +96,11 @@ export function useWallet() {
 
     const handleAccounts = (accounts: unknown) => {
       const account = Array.isArray(accounts) ? (accounts[0] as Address | undefined) : undefined;
-      setState((current) => ({ ...current, account, status: getStatus(account, current.chainId) }));
+      setState((current) => ({ account, chainId: current.chainId, status: getStatus(account, current.chainId) }));
     };
     const handleChain = (chain: unknown) => {
       const chainId = parseChainId(chain);
-      setState((current) => ({ ...current, chainId, status: getStatus(current.account, chainId) }));
+      setState((current) => ({ account: current.account, chainId, status: getStatus(current.account, chainId) }));
     };
 
     window.ethereum.on("accountsChanged", handleAccounts);

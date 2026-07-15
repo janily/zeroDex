@@ -1,8 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Drawer } from "./components/Drawer";
 import { ContextPanel, Sidebar, Topbar } from "./components/layout";
 import { TOKENS } from "./config/tokens";
-import { mockPools, mockPositions } from "./data/mockData";
 import { useDexData } from "./hooks/useDexData";
 import { usePositions } from "./hooks/usePositions";
 import { useSwapQuote } from "./hooks/useSwapQuote";
@@ -18,7 +17,21 @@ import { PoolsPage } from "./pages/PoolsPage";
 import { PositionsPage } from "./pages/PositionsPage";
 import { SwapPage } from "./pages/SwapPage";
 import type { DrawerType, RunTransaction, TokenAddress } from "./types/app";
-import type { Page } from "./types/ui";
+import type { Page, Pool } from "./types/ui";
+
+const emptyPool: Pool = {
+  id: "no-pool",
+  index: 0,
+  pair: "No pool selected",
+  token0: "—",
+  token1: "—",
+  fee: "—",
+  price: "No on-chain pool data",
+  range: "—",
+  liquidity: 0,
+  status: "No liquidity",
+  volume: "—",
+};
 
 export function App() {
   const [page, setPage] = useState<Page>("pools");
@@ -27,12 +40,12 @@ export function App() {
   const [hideEmpty, setHideEmpty] = useState(true);
   const [selectedPoolId, setSelectedPoolId] = useState<string>();
   const [drawer, setDrawer] = useState<DrawerType | null>(null);
-  const [zanFailed, setZanFailed] = useState(false);
   const [manualPosition, setManualPosition] = useState("");
+  const [manualPositionError, setManualPositionError] = useState<string>();
   const [manualQueriedPosition, setManualQueriedPosition] = useState<{ id: string; raw: unknown } | undefined>();
   const [swapMode, setSwapMode] = useState<"input" | "output">("input");
-  const [swapIn, setSwapIn] = useState("250");
-  const [swapOut, setSwapOut] = useState("319.42");
+  const [swapIn, setSwapIn] = useState("");
+  const [swapOut, setSwapOut] = useState("");
   const [swapTokenIn, setSwapTokenIn] = useState<TokenAddress>(TOKENS[0].address);
   const [swapTokenOut, setSwapTokenOut] = useState<TokenAddress>(TOKENS[1].address);
 
@@ -41,10 +54,24 @@ export function App() {
   const transactions = useTransactions();
   const dexData = useDexData(wallet.account, isReady);
   const positionData = usePositions(wallet.account, isReady);
-  const activePools = dexData.pools.length > 0 ? dexData.pools.map(displayPoolToUiPool) : mockPools;
-  const chainPositions = [...positionData.positions, ...(manualQueriedPosition ? [manualQueriedPosition] : [])];
-  const activePositions = chainPositions.length > 0 ? chainPositions.map(positionDetailsToUiPosition) : mockPositions;
+  const activePools = dexData.pools.map(displayPoolToUiPool);
+  const chainPositions = [
+    ...positionData.positions,
+    ...(manualQueriedPosition && !positionData.positions.some((position) => position.id === manualQueriedPosition.id)
+      ? [manualQueriedPosition]
+      : []),
+  ];
+  const activePositions = chainPositions.map(positionDetailsToUiPosition);
   const canWritePositions = isReady && chainPositions.length > 0;
+
+  useEffect(() => {
+    setManualQueriedPosition(undefined);
+    setManualPosition("");
+    setManualPositionError(undefined);
+    setSelectedPoolId(undefined);
+    setDrawer(null);
+    transactions.reset();
+  }, [wallet.account, transactions.reset]);
 
   const filteredPools = useMemo(() => {
     return activePools.filter((pool) => {
@@ -55,7 +82,7 @@ export function App() {
     });
   }, [activePools, fee, hideEmpty, query]);
 
-  const selectedPool = activePools.find((pool) => pool.id === selectedPoolId) ?? activePools[0] ?? mockPools[0];
+  const selectedPool = activePools.find((pool) => pool.id === selectedPoolId) ?? activePools[0] ?? emptyPool;
   const selectedDisplayPool = dexData.pools.find(
     (pool) =>
       pool.index === selectedPool.index &&
@@ -71,8 +98,6 @@ export function App() {
     mode: swapMode === "input" ? "exact-input" : "exact-output",
     amountIn: parsedSwapIn,
     amountOut: parsedSwapOut,
-    account: wallet.account,
-    slippageBps: 50n,
   });
   const swapExecution = useMemo(() => {
     if (swapMode === "input" && parsedSwapIn === undefined) return undefined;
@@ -89,11 +114,38 @@ export function App() {
   }, [parsedSwapIn, parsedSwapOut, swapMode, swapQuote.quote, swapTokenIn, swapTokenOut]);
   const swapRequiredInput = swapExecution?.mode === "exact-input" ? swapExecution.amountIn : swapExecution?.amountInMaximum;
   const swapInputBalance = dexData.balances.find((balance) => balance.token.toLowerCase() === swapTokenIn.toLowerCase())?.value;
-  const swapHasInputBalance = swapRequiredInput === undefined || (swapInputBalance !== undefined && swapInputBalance >= swapRequiredInput);
+  const swapOutputBalance = dexData.balances.find((balance) => balance.token.toLowerCase() === swapTokenOut.toLowerCase())?.value;
+  const swapInputBalanceKnown = swapInputBalance !== undefined;
+  const swapHasInputBalance = swapRequiredInput !== undefined && swapInputBalance !== undefined && swapInputBalance >= swapRequiredInput;
   const swapInputDecimals = TOKENS.find((token) => token.address.toLowerCase() === swapTokenIn.toLowerCase())?.decimals ?? 18;
   const swapOutputDecimals = TOKENS.find((token) => token.address.toLowerCase() === swapTokenOut.toLowerCase())?.decimals ?? 18;
+  const displayedSwapIn =
+    swapMode === "output" ? (swapQuote.quote ? formatTokenAmount(swapQuote.quote.amountIn, swapInputDecimals) : "") : swapIn;
+  const displayedSwapOut =
+    swapMode === "input" ? (swapQuote.quote ? formatTokenAmount(swapQuote.quote.amountOut, swapOutputDecimals) : "") : swapOut;
+  const formatBalanceLabel = (balance: bigint | undefined, decimals: number) => {
+    if (!isReady) return "Connect wallet to view balance";
+    if (balance !== undefined) return `Balance ${formatTokenAmount(balance, decimals)}`;
+    return dexData.loading ? "Loading balance..." : "Balance unavailable";
+  };
+  const activeSwapAmount = swapMode === "input" ? parsedSwapIn : parsedSwapOut;
+  const swapReviewDisabledReason = !isReady
+    ? undefined
+    : swapTokenIn.toLowerCase() === swapTokenOut.toLowerCase()
+      ? "Choose two different tokens."
+      : activeSwapAmount === undefined || activeSwapAmount <= 0n
+        ? `Enter a valid ${swapMode === "input" ? "pay" : "receive"} amount.`
+        : swapQuote.loading
+          ? "Refreshing the on-chain quote..."
+          : swapQuote.error
+            ? swapQuote.error
+            : swapQuote.candidates.length === 0
+              ? "No tradable pool is available for this pair."
+              : !swapExecution
+                ? "A valid quote is required before review."
+                : undefined;
   const swapSummary = {
-    route: swapExecution ? `Pool #${swapExecution.poolIndex}` : undefined,
+    route: swapExecution ? swapExecution.poolIndices.map((index) => `#${index}`).join(" → ") : undefined,
     pay:
       swapExecution?.mode === "exact-output"
         ? `${formatTokenAmount(swapExecution.amountInMaximum, swapInputDecimals)} ${tokenSymbol(swapTokenIn)} max`
@@ -104,11 +156,34 @@ export function App() {
         : `${swapOut} ${tokenSymbol(swapTokenOut)}`,
     slippage: "0.50%",
   };
+  const drawerSelectedPool = drawer === "swap" && swapQuote.quote ? displayPoolToUiPool(swapQuote.quote.pool) : selectedPool;
+  const drawerSelectedDisplayPool = drawer === "swap" ? swapQuote.quote?.pool : selectedDisplayPool;
+  const contextPool = page === "swap" && swapQuote.quote ? displayPoolToUiPool(swapQuote.quote.pool) : selectedPool;
+  const openDrawer = (type: DrawerType) => {
+    if (transactions.isPending) return;
+    transactions.reset();
+    setDrawer(type);
+  };
+  const refreshAll = async () => {
+    if (!isReady) {
+      await wallet.refresh();
+      return;
+    }
+    await Promise.allSettled([dexData.refresh(), positionData.refresh(), swapQuote.refresh()]);
+  };
+  const openSwapForPool = (pool: Pool) => {
+    const displayPool = dexData.pools.find((candidate) => displayPoolToUiPool(candidate).id === pool.id);
+    if (!displayPool) return;
+    setSelectedPoolId(pool.id);
+    setSwapTokenIn(displayPool.token0.address as TokenAddress);
+    setSwapTokenOut(displayPool.token1.address as TokenAddress);
+    setSwapMode("input");
+    setDrawer(null);
+    setPage("swap");
+  };
 
   const runTransaction: RunTransaction = async (kind, payload) => {
     if (!isReady || !wallet.account || !window.ethereum) return;
-    if (kind === "approve") return;
-
     await transactions.runWrite(
       async () => {
         const contracts = await getWriteContracts(window.ethereum!);
@@ -134,7 +209,7 @@ export function App() {
           return contracts.swapRouter.exactInput({
             tokenIn: payload.tokenIn,
             tokenOut: payload.tokenOut,
-            indexPath: [payload.poolIndex],
+            indexPath: payload.poolIndices,
             recipient: wallet.account,
             deadline,
             amountIn: payload.amountIn,
@@ -147,7 +222,7 @@ export function App() {
           return contracts.swapRouter.exactOutput({
             tokenIn: payload.tokenIn,
             tokenOut: payload.tokenOut,
-            indexPath: [payload.poolIndex],
+            indexPath: payload.poolIndices,
             recipient: wallet.account,
             deadline,
             amountOut: payload.amountOut,
@@ -167,8 +242,9 @@ export function App() {
         throw new Error("Load Sepolia pool data before submitting this transaction");
       },
       async () => {
-        await dexData.refresh();
-        await positionData.refresh();
+        const results = await Promise.allSettled([dexData.refresh(), positionData.refresh(), swapQuote.refresh()]);
+        const failed = results.find((result) => result.status === "rejected");
+        if (failed?.status === "rejected") throw failed.reason;
       },
     );
   };
@@ -183,6 +259,8 @@ export function App() {
           error={wallet.error}
           connect={wallet.connect}
           switchToSepolia={wallet.switchToSepolia}
+          refresh={refreshAll}
+          refreshing={dexData.loading || positionData.loading || swapQuote.loading}
         />
         {page === "pools" && (
           <PoolsPage
@@ -195,20 +273,21 @@ export function App() {
             pools={filteredPools}
             selectedPool={selectedPool}
             setSelectedPoolId={setSelectedPoolId}
-            openDrawer={setDrawer}
-            runTransaction={runTransaction}
+            openDrawer={openDrawer}
             isReady={isReady}
             chainLoading={dexData.loading}
             chainError={dexData.error}
             refreshChainData={dexData.refresh}
+            onSwapPool={openSwapForPool}
+            hasSelectedChainPool={Boolean(selectedDisplayPool)}
           />
         )}
         {page === "swap" && (
           <SwapPage
             swapMode={swapMode}
             setSwapMode={setSwapMode}
-            swapIn={swapIn}
-            swapOut={swapOut}
+            swapIn={displayedSwapIn}
+            swapOut={displayedSwapOut}
             setSwapIn={setSwapIn}
             setSwapOut={setSwapOut}
             tokenIn={swapTokenIn}
@@ -216,47 +295,71 @@ export function App() {
             setTokenIn={setSwapTokenIn}
             setTokenOut={setSwapTokenOut}
             quote={swapQuote}
-            openDrawer={setDrawer}
-            runTransaction={runTransaction}
+            openDrawer={openDrawer}
             isReady={isReady}
-            canReview={Boolean(swapExecution) && swapHasInputBalance}
+            canReview={Boolean(swapExecution)}
+            payBalanceLabel={formatBalanceLabel(swapInputBalance, swapInputDecimals)}
+            receiveBalanceLabel={formatBalanceLabel(swapOutputBalance, swapOutputDecimals)}
+            reviewDisabledReason={swapReviewDisabledReason}
           />
         )}
         {page === "positions" && (
           <PositionsPage
-            zanFailed={zanFailed}
-            setZanFailed={setZanFailed}
             manualPosition={manualPosition}
             setManualPosition={setManualPosition}
+            manualPositionError={manualPositionError}
             runTransaction={runTransaction}
-            openDrawer={setDrawer}
+            openDrawer={openDrawer}
+            canAddLiquidity={isReady && Boolean(selectedDisplayPool)}
             canWritePositions={canWritePositions}
+            walletAccount={wallet.account}
             positions={activePositions}
             positionsLoading={positionData.loading}
             positionsError={positionData.error}
+            isReady={isReady}
+            showManualLookup={isReady && !positionData.loading && positionData.positions.length === 0}
             queryManualPosition={async (positionId) => {
-              const next = await positionData.fetchManualPosition(positionId);
-              setManualQueriedPosition(next);
-              setManualPosition(next.id);
+              setManualPositionError(undefined);
+              try {
+                const next = await positionData.fetchManualPosition(positionId);
+                setManualQueriedPosition(next);
+                setManualPosition(next.id);
+              } catch (caught) {
+                setManualQueriedPosition(undefined);
+                setManualPositionError(caught instanceof Error ? caught.message : "Unable to query position");
+              }
             }}
           />
         )}
-        {page === "activity" && <ActivityPage txStage={transactions.stage} />}
+        {page === "activity" && <ActivityPage txStage={transactions.stage} hash={transactions.hash} error={transactions.error} syncError={transactions.syncError} />}
       </section>
-      <ContextPanel selectedPool={selectedPool} txStage={transactions.stage} openDrawer={setDrawer} />
+      <ContextPanel
+        selectedPool={contextPool}
+        txStage={transactions.stage}
+        openDrawer={openDrawer}
+        balances={dexData.balances}
+        balancesLoading={dexData.loading}
+        isReady={isReady && Boolean(selectedDisplayPool) && page !== "swap"}
+      />
       {drawer && (
         <Drawer
           type={drawer}
           onClose={() => setDrawer(null)}
-          selectedPool={selectedPool}
-          selectedDisplayPool={selectedDisplayPool}
+          selectedPool={drawerSelectedPool}
+          selectedDisplayPool={drawerSelectedDisplayPool}
           txStage={transactions.stage}
           txError={transactions.error}
+          txSyncError={transactions.syncError}
+          transactionPending={transactions.isPending}
           approveToken={transactions.approveToken}
+          resetTransaction={transactions.reset}
           walletAccount={wallet.account}
           swapExecution={swapExecution}
           swapSummary={swapSummary}
           swapHasInputBalance={swapHasInputBalance}
+          swapInputBalanceKnown={swapInputBalanceKnown}
+          tokenBalances={dexData.balances}
+          chainDataLoading={dexData.loading}
           runTransaction={runTransaction}
           isReady={isReady}
         />

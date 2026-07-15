@@ -32,8 +32,9 @@ Position NFT discovery can use ZAN when these environment variables are configur
 
 ```bash
 VITE_ZAN_NFT_ENDPOINT=
-VITE_ZAN_API_KEY=
 ```
+
+Use a same-origin/backend proxy for authenticated ZAN access. Do not put a private API key in a `VITE_*` variable because Vite exposes those values to browser code.
 
 If ZAN is unavailable, the Position screen keeps a manual `positionId` lookup path.
 

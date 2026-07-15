@@ -18,6 +18,7 @@ export type Pool = {
 
 export type Position = {
   id: string;
+  owner?: string;
   pair: string;
   poolIndex: number;
   range: string;
