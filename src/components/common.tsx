@@ -78,9 +78,10 @@ export function TxTimeline({ stage, compact = false }: { stage: TransactionStage
       {steps.map(([key, label], index) => {
         const active = activeIndex >= index + 1;
         const current = stage === key;
+        const pending = current && key !== "success";
         return (
-          <div className={`tx-step ${active ? "active" : ""} ${current ? "current" : ""}`} key={key}>
-            <span>{current && key !== "success" ? <Loader2 size={13} /> : active ? <Check size={13} /> : index + 1}</span>
+          <div className={`tx-step ${active ? "active" : ""} ${current ? "current" : ""} ${pending ? "pending" : ""}`} key={key}>
+            <span>{pending ? <Loader2 size={13} /> : active ? <Check size={13} /> : index + 1}</span>
             <strong>{label}</strong>
           </div>
         );

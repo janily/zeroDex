@@ -11,13 +11,27 @@ import { formatTokenAmount, parseTokenAmount } from "./lib/amount";
 import { getWriteContracts } from "./lib/contracts";
 import { buildCreatePoolParams } from "./lib/createPool";
 import { buildSwapExecution } from "./lib/swapExecution";
+import type { SwapExecutionPayload } from "./lib/swapExecution";
 import { displayPoolToUiPool, positionDetailsToUiPosition, safeParseSwapAmount, tokenSymbol } from "./lib/uiFormat";
 import { ActivityPage } from "./pages/ActivityPage";
 import { PoolsPage } from "./pages/PoolsPage";
 import { PositionsPage } from "./pages/PositionsPage";
 import { SwapPage } from "./pages/SwapPage";
 import type { DrawerType, RunTransaction, TokenAddress } from "./types/app";
+import type { DisplayPool } from "./types/domain";
 import type { Page, Pool } from "./types/ui";
+
+type SwapReviewSnapshot = {
+  selectedPool: Pool;
+  selectedDisplayPool: DisplayPool;
+  execution: SwapExecutionPayload;
+  summary: {
+    route?: string;
+    pay: string;
+    receive: string;
+    slippage: string;
+  };
+};
 
 const emptyPool: Pool = {
   id: "no-pool",
@@ -48,6 +62,7 @@ export function App() {
   const [swapOut, setSwapOut] = useState("");
   const [swapTokenIn, setSwapTokenIn] = useState<TokenAddress>(TOKENS[0].address);
   const [swapTokenOut, setSwapTokenOut] = useState<TokenAddress>(TOKENS[1].address);
+  const [swapReviewSnapshot, setSwapReviewSnapshot] = useState<SwapReviewSnapshot>();
 
   const wallet = useWallet();
   const isReady = wallet.status === "connected";
@@ -70,6 +85,7 @@ export function App() {
     setManualPositionError(undefined);
     setSelectedPoolId(undefined);
     setDrawer(null);
+    setSwapReviewSnapshot(undefined);
     transactions.reset();
   }, [wallet.account, transactions.reset]);
 
@@ -156,12 +172,25 @@ export function App() {
         : `${swapOut} ${tokenSymbol(swapTokenOut)}`,
     slippage: "0.50%",
   };
-  const drawerSelectedPool = drawer === "swap" && swapQuote.quote ? displayPoolToUiPool(swapQuote.quote.pool) : selectedPool;
-  const drawerSelectedDisplayPool = drawer === "swap" ? swapQuote.quote?.pool : selectedDisplayPool;
+  const liveSwapReviewPool = swapQuote.quote ? displayPoolToUiPool(swapQuote.quote.pool) : selectedPool;
+  const drawerSelectedPool = drawer === "swap" ? (swapReviewSnapshot?.selectedPool ?? liveSwapReviewPool) : selectedPool;
+  const drawerSelectedDisplayPool = drawer === "swap" ? (swapReviewSnapshot?.selectedDisplayPool ?? swapQuote.quote?.pool) : selectedDisplayPool;
   const contextPool = page === "swap" && swapQuote.quote ? displayPoolToUiPool(swapQuote.quote.pool) : selectedPool;
   const openDrawer = (type: DrawerType) => {
     if (transactions.isPending) return;
     transactions.reset();
+    if (type !== "swap") {
+      setSwapReviewSnapshot(undefined);
+      setDrawer(type);
+      return;
+    }
+    if (!swapExecution || !swapQuote.quote) return;
+    setSwapReviewSnapshot({
+      selectedPool: displayPoolToUiPool(swapQuote.quote.pool),
+      selectedDisplayPool: swapQuote.quote.pool,
+      execution: swapExecution,
+      summary: swapSummary,
+    });
     setDrawer(type);
   };
   const refreshAll = async () => {
@@ -346,7 +375,10 @@ export function App() {
       {drawer && (
         <Drawer
           type={drawer}
-          onClose={() => setDrawer(null)}
+          onClose={() => {
+            setDrawer(null);
+            setSwapReviewSnapshot(undefined);
+          }}
           selectedPool={drawerSelectedPool}
           selectedDisplayPool={drawerSelectedDisplayPool}
           txStage={transactions.stage}
@@ -356,8 +388,8 @@ export function App() {
           approveToken={transactions.approveToken}
           resetTransaction={transactions.reset}
           walletAccount={wallet.account}
-          swapExecution={swapExecution}
-          swapSummary={swapSummary}
+          swapExecution={drawer === "swap" ? (swapReviewSnapshot?.execution ?? swapExecution) : swapExecution}
+          swapSummary={drawer === "swap" ? (swapReviewSnapshot?.summary ?? swapSummary) : swapSummary}
           swapHasInputBalance={swapHasInputBalance}
           swapInputBalanceKnown={swapInputBalanceKnown}
           tokenBalances={dexData.balances}

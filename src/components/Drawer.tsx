@@ -121,7 +121,8 @@ export function Drawer({
     }
     return [];
   }, [liquidityValidation.amount0, liquidityValidation.amount1, selectedDisplayPool, swapExecution, type]);
-  const allowances = useAllowances(walletAccount, allowanceChecks, isReady && type !== "create");
+  const transactionCompleted = txStage === "success";
+  const allowances = useAllowances(walletAccount, allowanceChecks, isReady && type !== "create" && !transactionCompleted);
   const balance0 = selectedDisplayPool
     ? tokenBalances.find((balance) => balance.token.toLowerCase() === selectedDisplayPool.token0.address.toLowerCase())?.value
     : undefined;
@@ -149,8 +150,8 @@ export function Drawer({
     (type !== "swap" || (Boolean(swapExecution) && swapHasInputBalance)) &&
     allowanceReady &&
     !transactionPending;
-  const nextAllowance = allowances.next;
-  const completedWrite = txStage === "success" && !nextAllowance && allowanceReady;
+  const nextAllowance = transactionCompleted ? undefined : allowances.next;
+  const completedWrite = transactionCompleted;
   const primaryText = !isReady
     ? "Connect wallet"
     : completedWrite
