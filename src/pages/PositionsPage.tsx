@@ -24,7 +24,7 @@ export function PositionsPage(props: {
       <div className="section-header">
         <div>
           <h2>Positions</h2>
-          <p>LP NFTs from PositionManager, enriched through ZAN with a manual fallback path.</p>
+          <p>LP NFTs created through PositionManager. Indexed through ZAN, with manual positionId lookup as fallback.</p>
         </div>
         <div className="inline-actions">
           <button className="primary-button" onClick={() => props.openDrawer("liquidity")} disabled={!props.canAddLiquidity}>
@@ -38,7 +38,7 @@ export function PositionsPage(props: {
           {props.positionsError ? <X size={16} /> : <Loader2 size={16} />}
           <div>
             <strong>{props.positionsError ? "Position lookup warning" : "Loading LP positions"}</strong>
-            <span>{props.positionsError ?? "Reading ZAN NFT IDs and PositionManager.getPositionInfo."}</span>
+            <span>{props.positionsError ?? "Reading ZAN NFT IDs, then PositionManager.getPositionInfo for each ID."}</span>
           </div>
         </div>
       )}
@@ -47,18 +47,26 @@ export function PositionsPage(props: {
           <X size={16} />
           <div>
             <strong>Manual position lookup</strong>
-            <span>No indexed positions were found. Enter a positionId owned by the connected account.</span>
+            <span>This page is functional, but no owned PositionManager NFT was indexed for this wallet. Mint liquidity or enter an owned positionId from the mint transaction NFT Transfer log.</span>
           </div>
           <input value={props.manualPosition} onChange={(event) => props.setManualPosition(event.target.value)} placeholder="positionId" />
           <button className="secondary-button" onClick={() => void props.queryManualPosition(props.manualPosition)}>
             Query
           </button>
+          <a
+            className="subtle-link"
+            href="https://sepolia.etherscan.io/address/0xbe766Bf20eFfe431829C5d5a2744865974A0B610#tokentxnsErc721"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Find positionId
+          </a>
         </div>
       )}
       {props.manualPositionError && <div className="inline-error compact-error"><X size={16} /><div><strong>Position lookup failed</strong><span>{props.manualPositionError}</span></div></div>}
       <div className="position-grid">
         {props.positions.length === 0 && !props.positionsLoading && (
-          <div className="empty-state"><Database size={24} /><strong>{props.isReady ? "No positions found" : "Connect wallet to load positions"}</strong><span>{props.isReady ? "Mint liquidity or use the manual lookup above." : "Position data is read from Sepolia and the configured NFT indexer."}</span></div>
+          <div className="empty-state"><Database size={24} /><strong>{props.isReady ? "No positions found" : "Connect wallet to load positions"}</strong><span>{props.isReady ? "Positions appear after you mint liquidity through PositionManager, or after you query an owned positionId manually." : "Position data is read from Sepolia and the configured NFT indexer."}</span></div>
         )}
         {props.positions.map((position) => {
           const isOwned = Boolean(
