@@ -28,15 +28,25 @@ The app remains browsable without a wallet. Write actions require MetaMask conne
 
 ## Optional ZAN Position Lookup
 
-Position NFT discovery can use ZAN when these environment variables are configured:
+Position NFT discovery can use ZAN when these environment variables are configured in `.env.local`:
 
 ```bash
-VITE_ZAN_NFT_ENDPOINT=
+cp .env.example .env.local
 ```
 
-Use a same-origin/backend proxy for authenticated ZAN access. Do not put a private API key in a `VITE_*` variable because Vite exposes those values to browser code.
+```bash
+# Recommended: your own proxy endpoint that calls ZAN server-side.
+VITE_ZAN_NFT_ENDPOINT=/api/zan/nfts-by-owner
 
-If ZAN is unavailable, the Position screen keeps a manual `positionId` lookup path.
+# Optional for local/demo direct browser calls only. Vite exposes this value.
+VITE_ZAN_API_KEY=
+```
+
+`VITE_ZAN_NFT_ENDPOINT` is the URL the frontend calls to discover PositionManager NFTs. The app automatically appends `owner=<connected wallet>` and `contractAddress=<PositionManager address>` query params, then reads token IDs from `result.data`, `result.list`, or `data`.
+
+For authenticated ZAN access, use a same-origin/backend proxy and keep the real ZAN API key on the server. Only set `VITE_ZAN_API_KEY` for local/demo direct browser requests because every `VITE_*` variable is embedded into browser JavaScript.
+
+After editing `.env.local`, restart `npm run dev`. If ZAN is unavailable, the Position screen keeps a manual `positionId` lookup path.
 
 ## Implementation Plan
 
