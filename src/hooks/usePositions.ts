@@ -47,15 +47,33 @@ export function usePositions(account?: Address, enabled = false) {
     const positionManager = contracts.positionManager.connect(signer) as typeof contracts.positionManager;
     const normalizedId = BigInt(positionId.trim()).toString();
     try {
-      const [raw, ownerValue] = await Promise.all([
-        positionManager.getPositionInfo(normalizedId),
-        positionManager.ownerOf(normalizedId),
-      ]);
-      const owner = String(ownerValue) as Address;
+      const owner = String(await positionManager.ownerOf(normalizedId)) as Address;
       if (account && owner.toLowerCase() !== account.toLowerCase()) {
         throw new Error("Position is not owned by the connected account");
       }
-      return { id: normalizedId, owner, raw };
+
+      try {
+        const raw = await positionManager.getPositionInfo(normalizedId);
+        return { id: normalizedId, owner, raw };
+      } catch {
+        const fallback = await positionManager.positions(normalizedId);
+        return {
+          id: normalizedId,
+          owner,
+          raw: {
+            owner,
+            token0: fallback.token0,
+            token1: fallback.token1,
+            index: 0,
+            fee: fallback.fee,
+            liquidity: fallback.liquidity,
+            tickLower: fallback.tickLower,
+            tickUpper: fallback.tickUpper,
+            tokensOwed0: fallback.tokensOwed0,
+            tokensOwed1: fallback.tokensOwed1,
+          },
+        };
+      }
     } catch (caught) {
       throw new Error(normalizePositionLookupError(caught, normalizedId));
     }

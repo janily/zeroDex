@@ -239,7 +239,7 @@ VITE_ZAN_API_KEY=
 1. 输入当前连接钱包拥有的 `positionId`。
 2. 点击 `Query`。
 
-页面会直接调用 PositionManager 的 `getPositionInfo(positionId)`。
+页面会先校验 `ownerOf(positionId)`，再优先调用 PositionManager 的 `getPositionInfo(positionId)`；如果该读取接口在当前合约上不可用，会回退尝试常见的 `positions(positionId)` 读取方式。
 
 ### 6.3 positionId 去哪里找
 
