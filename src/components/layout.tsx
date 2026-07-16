@@ -1,4 +1,5 @@
-import { Activity, ArrowDownUp, Database, ExternalLink, Layers3, Plus, RefreshCw, Wallet } from "lucide-react";
+import { Activity, ArrowDownUp, Database, ExternalLink, Layers3, LogOut, Plus, RefreshCw, Repeat2, Wallet } from "lucide-react";
+import { useState } from "react";
 import { TOKENS } from "../config/tokens";
 import type { TokenBalance } from "../hooks/useDexData";
 import type { WalletStatus } from "../hooks/useWallet";
@@ -56,6 +57,8 @@ export function Topbar({
   status,
   error,
   connect,
+  disconnect,
+  switchAccount,
   switchToSepolia,
   refresh,
   refreshing,
@@ -64,12 +67,20 @@ export function Topbar({
   status: WalletStatus;
   error?: string;
   connect: () => Promise<void>;
+  disconnect: () => Promise<void>;
+  switchAccount: () => Promise<void>;
   switchToSepolia: () => Promise<void>;
   refresh: () => Promise<void>;
   refreshing: boolean;
 }) {
+  const [walletMenuOpen, setWalletMenuOpen] = useState(false);
   const label = getWalletLabel(status, account);
   const action = status === "wrong-network" ? switchToSepolia : connect;
+  const hasConnectedWallet = status === "connected" && Boolean(account);
+  const closeAndRun = (handler: () => Promise<void>) => {
+    setWalletMenuOpen(false);
+    void handler();
+  };
   return (
     <header className="topbar">
       <div>
@@ -81,10 +92,27 @@ export function Topbar({
         <button className="icon-button" title="Refresh chain data" onClick={() => void refresh()} disabled={refreshing}>
           <RefreshCw size={16} />
         </button>
-        <button className={`wallet-button ${walletClass(status)}`} onClick={() => void action()}>
-          <Wallet size={16} />
-          {label}
-        </button>
+        <div className="wallet-menu-wrap">
+          <button
+            className={`wallet-button ${walletClass(status)}`}
+            onClick={() => (hasConnectedWallet ? setWalletMenuOpen((open) => !open) : void action())}
+            aria-expanded={hasConnectedWallet ? walletMenuOpen : undefined}
+            aria-haspopup={hasConnectedWallet ? "menu" : undefined}
+          >
+            <Wallet size={16} />
+            {label}
+          </button>
+          {hasConnectedWallet && walletMenuOpen && (
+            <div className="wallet-menu" role="menu">
+              <button type="button" role="menuitem" onClick={() => closeAndRun(switchAccount)}>
+                <Repeat2 size={15} /> Switch wallet
+              </button>
+              <button type="button" role="menuitem" onClick={() => closeAndRun(disconnect)}>
+                <LogOut size={15} /> Disconnect
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

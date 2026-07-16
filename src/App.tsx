@@ -258,6 +258,8 @@ export function App() {
           status={wallet.status}
           error={wallet.error}
           connect={wallet.connect}
+          disconnect={wallet.disconnect}
+          switchAccount={wallet.switchAccount}
           switchToSepolia={wallet.switchToSepolia}
           refresh={refreshAll}
           refreshing={dexData.loading || positionData.loading || swapQuote.loading}
