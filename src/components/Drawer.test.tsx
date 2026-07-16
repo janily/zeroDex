@@ -77,6 +77,27 @@ describe("Drawer transaction actions", () => {
     expect(props.runTransaction).not.toHaveBeenCalled();
   });
 
+  it("treats a successful swap as complete even if the spent allowance is now below the same quote", async () => {
+    mocks.useAllowances.mockReturnValue({
+      missing: [],
+      loading: false,
+      error: undefined,
+      ready: true,
+      refresh: vi.fn(async () => undefined),
+      next: { token: TOKENS[0].address, spender: TOKENS[3].address, required: 10n },
+    });
+    const props = renderDrawer({ txStage: "success" });
+
+    expect(mocks.useAllowances).toHaveBeenLastCalledWith(props.walletAccount, expect.any(Array), false);
+    expect(screen.queryByText("Approval required")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Close review" }));
+
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+    expect(props.approveToken).not.toHaveBeenCalled();
+    expect(props.runTransaction).not.toHaveBeenCalled();
+  });
+
   it("refreshes allowances and resets approval state before exposing the write action", async () => {
     const refresh = vi.fn(async () => undefined);
     mocks.useAllowances.mockReturnValue({

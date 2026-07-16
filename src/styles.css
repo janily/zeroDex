@@ -838,7 +838,7 @@ p {
   background: #242b38;
 }
 
-.tx-step.current svg {
+.tx-step.pending svg {
   animation: spin 900ms linear infinite;
 }
 
