@@ -216,6 +216,43 @@ p {
   gap: 10px;
 }
 
+.wallet-menu-wrap {
+  position: relative;
+}
+
+.wallet-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 20;
+  display: grid;
+  min-width: 170px;
+  padding: 6px;
+  background: #11151f;
+  border: 1px solid #2c3240;
+  border-radius: 10px;
+  box-shadow: 0 18px 40px rgb(0 0 0 / 35%);
+}
+
+.wallet-menu button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  color: #dfe3ec;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  text-align: left;
+}
+
+.wallet-menu button:hover {
+  background: #1a1f2b;
+  color: #f4f6fa;
+}
+
 .section-header {
   justify-content: space-between;
   margin-bottom: 16px;

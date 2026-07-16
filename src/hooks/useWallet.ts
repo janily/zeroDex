@@ -90,6 +90,39 @@ export function useWallet() {
     }
   }, [refresh]);
 
+  const switchAccount = useCallback(async () => {
+    if (!window.ethereum) {
+      setState({ status: "missing", error: "MetaMask is not installed" });
+      return;
+    }
+
+    try {
+      await window.ethereum.request({ method: "wallet_requestPermissions", params: [{ eth_accounts: {} }] });
+      await refresh();
+    } catch (error) {
+      setState((current) => ({
+        ...current,
+        status: "error",
+        error: error instanceof Error ? error.message : "Wallet account switch rejected",
+      }));
+    }
+  }, [refresh]);
+
+  const disconnect = useCallback(async () => {
+    if (!window.ethereum) {
+      setState({ status: "missing" });
+      return;
+    }
+
+    try {
+      await window.ethereum.request({ method: "wallet_revokePermissions", params: [{ eth_accounts: {} }] });
+    } catch {
+      // Some injected wallets do not support permission revocation. The app can still clear local wallet state.
+    } finally {
+      setState({ status: "disconnected" });
+    }
+  }, []);
+
   useEffect(() => {
     void refresh();
     if (!window.ethereum?.on) return;
@@ -111,5 +144,8 @@ export function useWallet() {
     };
   }, [refresh]);
 
-  return useMemo(() => ({ ...state, connect, refresh, switchToSepolia }), [connect, refresh, state, switchToSepolia]);
+  return useMemo(
+    () => ({ ...state, connect, disconnect, refresh, switchAccount, switchToSepolia }),
+    [connect, disconnect, refresh, state, switchAccount, switchToSepolia],
+  );
 }
