@@ -23,7 +23,7 @@ export function PoolsPage(props: {
   hasSelectedChainPool: boolean;
 }) {
   return (
-    <div className="page-grid">
+    <div className="page-grid pools-page-grid">
       <section className="main-column">
         {!props.isReady && <div className="chain-banner"><Database size={16} /><div><strong>Chain data paused</strong><span>Connect a Sepolia wallet to load pools and balances.</span></div></div>}
         <div className="section-header">

@@ -35,7 +35,9 @@ button {
 .shell {
   display: grid;
   grid-template-columns: 210px minmax(0, 1fr) 280px;
+  height: 100dvh;
   min-height: 100dvh;
+  overflow: hidden;
 }
 
 .sidebar {
@@ -151,7 +153,11 @@ code,
 }
 
 .workspace {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   padding: 22px;
 }
 
@@ -337,6 +343,11 @@ p {
   display: grid;
   grid-template-columns: minmax(620px, 1fr) 318px;
   gap: 18px;
+  min-height: 0;
+}
+
+.pools-page-grid {
+  flex: 1;
 }
 
 .main-column,
@@ -347,6 +358,12 @@ p {
 .drawer,
 .detail-surface {
   min-width: 0;
+}
+
+.pools-page-grid .main-column {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
 }
 
 .full {
@@ -432,7 +449,30 @@ p {
 }
 
 .table-surface {
-  overflow: hidden;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-color: #41495a #121620;
+  scrollbar-width: thin;
+}
+
+.table-surface::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.table-surface::-webkit-scrollbar-track {
+  background: #121620;
+}
+
+.table-surface::-webkit-scrollbar-thumb {
+  background: #41495a;
+  border: 2px solid #121620;
+  border-radius: 999px;
+}
+
+.pools-page-grid .table-surface {
+  flex: 1;
+  max-height: 100%;
 }
 
 .table-row {
@@ -456,6 +496,9 @@ p {
 }
 
 .table-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   color: #767f91;
   background: #151925;
   font-size: 12px;
@@ -980,6 +1023,9 @@ p {
 @media (max-width: 820px) {
   .shell {
     grid-template-columns: 1fr;
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
   }
 
   .sidebar {
@@ -1002,6 +1048,7 @@ p {
   }
 
   .workspace {
+    overflow: visible;
     padding: 16px;
   }
 
