@@ -788,6 +788,18 @@ p {
   background: #151109;
 }
 
+.subtle-link {
+  color: #e8c38b;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.subtle-link:hover {
+  text-decoration: underline;
+}
+
 .activity-list {
   margin-top: 14px;
   padding: 8px 12px;

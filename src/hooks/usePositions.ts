@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getReadContracts } from "../lib/contracts";
+import { getReadContracts, getSigner } from "../lib/contracts";
 import { fetchPositionIdsFromZan } from "../services/zan";
 import type { Address } from "../types/domain";
 import "../types/ethereum";
@@ -10,6 +10,19 @@ export type PositionDetails = {
   raw: unknown;
 };
 
+export function normalizePositionLookupError(caught: unknown, positionId: string) {
+  if (caught instanceof Error && caught.message === "Position is not owned by the connected account") {
+    return caught.message;
+  }
+
+  const message = caught instanceof Error ? caught.message : String(caught ?? "");
+  if (/CALL_EXCEPTION|execution reverted|missing revert data|revert/i.test(message)) {
+    return `Position ${positionId} could not be read from PositionManager. Check that the ID exists on Sepolia and belongs to the connected wallet.`;
+  }
+
+  return message || `Unable to query position ${positionId}`;
+}
+
 export function usePositions(account?: Address, enabled = false) {
   const [positions, setPositions] = useState<PositionDetails[]>([]);
   const [loading, setLoading] = useState(false);
@@ -19,24 +32,54 @@ export function usePositions(account?: Address, enabled = false) {
   const loadPositionIds = useCallback(async () => {
     if (!account) return [];
     const endpoint = import.meta.env.VITE_ZAN_NFT_ENDPOINT as string | undefined;
-    if (!endpoint) return [];
-    return fetchPositionIdsFromZan({ owner: account, endpoint });
+    if (!endpoint) {
+      throw new Error("NFT indexer is not configured. Mint a position or enter a known positionId manually.");
+    }
+    const apiKey = import.meta.env.VITE_ZAN_API_KEY as string | undefined;
+    return fetchPositionIdsFromZan({ owner: account, endpoint, apiKey });
   }, [account]);
 
   const fetchManualPosition = useCallback(async (positionId: string) => {
     if (!/^\d+$/.test(positionId.trim())) throw new Error("Position ID must be a non-negative integer");
     if (!window.ethereum) throw new Error("MetaMask is not installed");
     const contracts = getReadContracts(window.ethereum);
+    const signer = await getSigner(window.ethereum);
+    const positionManager = contracts.positionManager.connect(signer) as typeof contracts.positionManager;
     const normalizedId = BigInt(positionId.trim()).toString();
-    const [raw, ownerValue] = await Promise.all([
-      contracts.positionManager.getPositionInfo(normalizedId),
-      contracts.positionManager.ownerOf(normalizedId),
-    ]);
-    const owner = String(ownerValue) as Address;
-    if (account && owner.toLowerCase() !== account.toLowerCase()) {
-      throw new Error("Position is not owned by the connected account");
+    try {
+      const owner = String(await positionManager.ownerOf(normalizedId)) as Address;
+      if (account && owner.toLowerCase() !== account.toLowerCase()) {
+        throw new Error("Position is not owned by the connected account");
+      }
+
+      try {
+        const raw = await positionManager.getPositionInfo(normalizedId);
+        return { id: normalizedId, owner, raw };
+      } catch {
+        // Some deployed PositionManager variants mint ERC721 position NFTs but expose
+        // their readable position state through the common positions(tokenId) getter
+        // instead of the course helper getPositionInfo(tokenId).
+        const fallback = await positionManager.positions(normalizedId);
+        return {
+          id: normalizedId,
+          owner,
+          raw: {
+            owner,
+            token0: fallback.token0,
+            token1: fallback.token1,
+            index: 0,
+            fee: fallback.fee,
+            liquidity: fallback.liquidity,
+            tickLower: fallback.tickLower,
+            tickUpper: fallback.tickUpper,
+            tokensOwed0: fallback.tokensOwed0,
+            tokensOwed1: fallback.tokensOwed1,
+          },
+        };
+      }
+    } catch (caught) {
+      throw new Error(normalizePositionLookupError(caught, normalizedId));
     }
-    return { id: normalizedId, owner, raw };
   }, [account]);
 
   const refresh = useCallback(async () => {

@@ -214,26 +214,47 @@ Positions 页面用于查看和管理 LP Position。
 
 页面优先使用 ZAN 查询当前钱包拥有的 Position NFT。
 
-可选环境变量：
+可选环境变量配置在项目根目录的 `.env.local` 中，可以先复制模板：
 
 ```bash
-VITE_ZAN_NFT_ENDPOINT=
+cp .env.example .env.local
+```
+
+```bash
+# 推荐填后端代理地址，由后端携带真正的 ZAN key 请求 ZAN。
+VITE_ZAN_NFT_ENDPOINT=/api/zan/nfts-by-owner
+
+# 仅本地/演示直连 ZAN 时使用；VITE_* 会暴露到浏览器，不要放生产私钥。
 VITE_ZAN_API_KEY=
 ```
 
-如果没有配置 ZAN，页面仍会展示本地示例数据，但示例数据不会允许发起真实 Collect 或 Burn 交易。
+`VITE_ZAN_NFT_ENDPOINT` 是前端用于发现 Position NFT 的 URL。前端会自动追加 `owner=<当前钱包地址>` 和 `contractAddress=<PositionManager 地址>` 查询参数，并从 `result.data`、`result.list` 或 `data` 中提取 `tokenId` / `token_id` / `tokenID`。
+
+修改 `.env.local` 后需要重启 `npm run dev`。如果没有配置 ZAN，Positions 页面不会自动列出钱包里的 LP NFT；此时需要先通过 `Mint position` / `Add liquidity` 创建头寸，或使用手动 `positionId` 查询。
 
 ### 6.2 手动查询 Position
 
-如果 ZAN 查询失败，可以打开手动 fallback：
+如果 ZAN 未配置、查询失败，或当前钱包没有被索引到的 Position NFT，页面会显示手动查询区域：
 
-1. 点击 `Toggle ZAN state`。
-2. 输入 positionId。
-3. 点击 `Query`。
+1. 输入当前连接钱包拥有的 `positionId`。
+2. 点击 `Query`。
 
-页面会直接调用 PositionManager 的 `getPositionInfo(positionId)`。
+页面会先校验 `ownerOf(positionId)`，再优先调用 PositionManager 的 `getPositionInfo(positionId)`；如果该读取接口在当前合约上不可用，会回退尝试常见的 `positions(positionId)` 读取方式。
 
-### 6.3 Collect、Burn 和 Review
+`getPositionInfo` 是课程/业务文档里的自定义便捷读取接口，不是 ERC721 标准接口。链上 NFT 页面能看到 `TokenID`，只代表 `ownerOf(tokenId)` 这类 ERC721 数据存在；如果当前部署版本没有实现同名 helper、helper 内部依赖的 position 映射和 NFT tokenId 不一致，或 helper 做了额外校验，就可能 revert。`positions(tokenId)` 更接近合约公开存储 getter，因此前端把它作为兼容回退。
+
+### 6.3 positionId 去哪里找
+
+`positionId` 本质上是 PositionManager 这个 ERC721 NFT 的 `tokenId`。常见获取方式：
+
+1. **优先自动查询**：配置好 ZAN 后，Positions 页面会自动查询当前钱包持有的 PositionManager NFT，并把每个 NFT 的 `tokenId` 当作 `positionId`。
+2. **从添加流动性交易里找**：完成 `Add liquidity` / `Mint position` 后，复制 Activity 或 MetaMask 中的交易 hash，在 Sepolia Etherscan 打开该交易。
+3. **看 NFT Transfer 日志**：在交易详情的 Logs 或 ERC-721 Token Transfers 中，找到 PositionManager 合约 `0xbe766Bf20eFfe431829C5d5a2744865974A0B610` 发出的 `Transfer` 记录，其中的 `Token ID` 就是 `positionId`。
+4. **看 PositionManager 的 NFT 转账页**：也可以打开 `https://sepolia.etherscan.io/address/0xbe766Bf20eFfe431829C5d5a2744865974A0B610#tokentxnsErc721`，按自己的钱包地址筛选最近的 ERC721 转账。
+
+只有当前连接钱包拥有的 `positionId` 才能通过手动查询并执行 Collect / Burn。查询时前端会用当前连接钱包地址发起链上读取，因为部分 PositionManager 读取逻辑依赖 `msg.sender` / NFT 所有权。如果手动查询提示 position 读取失败，通常说明填的不是 PositionManager NFT 的 Token ID、该 ID 不在 Sepolia 当前合约上，或它不属于当前连接钱包。
+
+### 6.4 Collect、Burn 和 Review
 
 当页面展示真实链上 Position 时：
 
