@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { getWriteContracts } from "../lib/contracts";
 import type { Address, TransactionStage } from "../types/domain";
-import "../types/ethereum";
+import type { EthereumProvider } from "../types/ethereum";
 
 export type TransactionState = {
   stage: TransactionStage;
@@ -20,7 +20,7 @@ function normalizeTransactionError(error: unknown): TransactionState {
   return { stage: "error", error: error instanceof Error ? error.message : "Transaction failed" };
 }
 
-export function useTransactions() {
+export function useTransactions(provider?: EthereumProvider) {
   const [state, setState] = useState<TransactionState>(idleState);
   const pending = useRef(false);
 
@@ -30,15 +30,15 @@ export function useTransactions() {
 
   const approveToken = useCallback(async (token: Address, spender: Address, amount: bigint) => {
     if (pending.current) return false;
-    if (!window.ethereum) {
-      setState({ stage: "error", error: "MetaMask is not installed" });
+    if (!provider) {
+      setState({ stage: "error", error: "No wallet is connected" });
       return false;
     }
 
     pending.current = true;
     try {
       setState({ stage: "waiting-signature" });
-      const contracts = await getWriteContracts(window.ethereum);
+      const contracts = await getWriteContracts(provider);
       const tx = await contracts.erc20(token).approve(spender, amount);
       setState({ stage: "submitted", hash: tx.hash });
       setState({ stage: "confirming", hash: tx.hash });
@@ -51,7 +51,7 @@ export function useTransactions() {
     } finally {
       pending.current = false;
     }
-  }, []);
+  }, [provider]);
 
   const runWrite = useCallback(async (write: () => Promise<{ hash: string; wait(): Promise<unknown> }>, afterSuccess?: () => Promise<void>) => {
     if (pending.current) return false;

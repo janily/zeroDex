@@ -9,6 +9,7 @@ import { buildCreatePoolParams } from "../lib/createPool";
 import { shortAddress, tokenSymbol } from "../lib/uiFormat";
 import type { SwapExecutionPayload } from "../lib/swapExecution";
 import type { Address, DisplayPool, TransactionStage } from "../types/domain";
+import type { EthereumProvider } from "../types/ethereum";
 import type { CreateDrawerState, DrawerType, LiquidityDrawerState, RunTransaction } from "../types/app";
 import type { Pool } from "../types/ui";
 import { TxTimeline } from "./common";
@@ -34,6 +35,7 @@ export function Drawer({
   swapInputBalanceKnown = true,
   runTransaction,
   isReady,
+  provider,
 }: {
   type: DrawerType;
   onClose: () => void;
@@ -59,6 +61,7 @@ export function Drawer({
   swapInputBalanceKnown?: boolean;
   runTransaction: RunTransaction;
   isReady: boolean;
+  provider?: EthereumProvider;
 }) {
   const [createForm, setCreateForm] = useState<CreateDrawerState>({
     type: "create",
@@ -122,7 +125,7 @@ export function Drawer({
     return [];
   }, [liquidityValidation.amount0, liquidityValidation.amount1, selectedDisplayPool, swapExecution, type]);
   const transactionCompleted = txStage === "success";
-  const allowances = useAllowances(walletAccount, allowanceChecks, isReady && type !== "create" && !transactionCompleted);
+  const allowances = useAllowances(walletAccount, allowanceChecks, isReady && type !== "create" && !transactionCompleted, provider);
   const balance0 = selectedDisplayPool
     ? tokenBalances.find((balance) => balance.token.toLowerCase() === selectedDisplayPool.token0.address.toLowerCase())?.value
     : undefined;

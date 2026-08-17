@@ -3,7 +3,7 @@ import { getReadContracts } from "../lib/contracts";
 import { getSwapPriceLimitForPools } from "../lib/price";
 import { getCandidatePools, getCandidateRoutes, selectBestQuote, type QuoteResult } from "../lib/routing";
 import type { Address, DisplayPool, SwapMode } from "../types/domain";
-import "../types/ethereum";
+import type { EthereumProvider } from "../types/ethereum";
 
 export type SwapQuoteState = {
   quote?: QuoteResult;
@@ -21,8 +21,9 @@ export function useSwapQuote(input: {
   mode: SwapMode;
   amountIn?: bigint;
   amountOut?: bigint;
+  provider?: EthereumProvider;
 }): SwapQuoteState {
-  const { enabled, pools, tokenIn, tokenOut, mode, amountIn, amountOut } = input;
+  const { enabled, pools, tokenIn, tokenOut, mode, amountIn, amountOut, provider } = input;
   const [quote, setQuote] = useState<QuoteResult | undefined>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -53,8 +54,7 @@ export function useSwapQuote(input: {
     const currentRequest = requestId.current + 1;
     requestId.current = currentRequest;
     const quoteAmount = mode === "exact-input" ? amountIn : amountOut;
-
-    if (!enabled || !window.ethereum || !tokenIn || !tokenOut || candidates.length === 0 || quoteAmount === undefined || quoteAmount <= 0n) {
+    if (!enabled || !provider || !tokenIn || !tokenOut || candidates.length === 0 || quoteAmount === undefined || quoteAmount <= 0n) {
       setQuote(undefined);
       setError(undefined);
       setLoading(false);
@@ -65,7 +65,7 @@ export function useSwapQuote(input: {
     setLoading(true);
     setError(undefined);
     try {
-      const contracts = getReadContracts(window.ethereum);
+      const contracts = getReadContracts(provider);
       const routes = getCandidateRoutes(candidates)
         .map((pools) => ({ pools, sqrtPriceLimitX96: getSwapPriceLimitForPools(pools, tokenIn) }))
         .filter((route): route is { pools: DisplayPool[]; sqrtPriceLimitX96: bigint } => route.sqrtPriceLimitX96 !== undefined);
@@ -116,13 +116,13 @@ export function useSwapQuote(input: {
       if (requestId.current !== currentRequest) return;
       setLoading(false);
     }
-  }, [amountIn, amountOut, candidates, enabled, mode, tokenIn, tokenOut]);
+  }, [amountIn, amountOut, candidates, enabled, mode, provider, tokenIn, tokenOut]);
 
   useEffect(() => {
     const quoteAmount = mode === "exact-input" ? amountIn : amountOut;
     const canQuote =
       enabled &&
-      Boolean(window.ethereum && tokenIn && tokenOut && candidates.length > 0 && quoteAmount !== undefined && quoteAmount > 0n);
+      Boolean(provider && tokenIn && tokenOut && candidates.length > 0 && quoteAmount !== undefined && quoteAmount > 0n);
     if (!canQuote) {
       void refresh();
       return;
@@ -134,7 +134,7 @@ export function useSwapQuote(input: {
     setLoading(true);
     const timeout = window.setTimeout(() => void refresh(), 200);
     return () => window.clearTimeout(timeout);
-  }, [amountIn, amountOut, candidates.length, enabled, mode, refresh, tokenIn, tokenOut]);
+  }, [amountIn, amountOut, candidates.length, enabled, mode, provider, refresh, tokenIn, tokenOut]);
 
   return useMemo(() => ({ quote, candidates, loading, error, refresh }), [candidates, error, loading, quote, refresh]);
 }

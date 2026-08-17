@@ -5,6 +5,6 @@ export const SEPOLIA_PARAMS = {
   chainId: SEPOLIA_HEX_CHAIN_ID,
   chainName: "Sepolia",
   nativeCurrency: { name: "Sepolia Ether", symbol: "ETH", decimals: 18 },
-  rpcUrls: ["https://rpc.sepolia.org"],
+  rpcUrls: ["https://ethereum-sepolia-rpc.publicnode.com"],
   blockExplorerUrls: ["https://sepolia.etherscan.io"],
 } as const;

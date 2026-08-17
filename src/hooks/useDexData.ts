@@ -3,7 +3,7 @@ import { TOKENS } from "../config/tokens";
 import { getReadContracts } from "../lib/contracts";
 import { normalizePool } from "../lib/pool";
 import type { Address, DisplayPool, PoolInfo } from "../types/domain";
-import "../types/ethereum";
+import type { EthereumProvider } from "../types/ethereum";
 
 export type TokenBalance = {
   token: Address;
@@ -32,7 +32,7 @@ function toPoolInfo(raw: Record<string, unknown>): PoolInfo {
   };
 }
 
-export function useDexData(account?: Address, enabled = false): DexDataState {
+export function useDexData(account?: Address, enabled = false, provider?: EthereumProvider): DexDataState {
   const [pools, setPools] = useState<DisplayPool[]>([]);
   const [balances, setBalances] = useState<TokenBalance[]>([]);
   const [loading, setLoading] = useState(false);
@@ -42,7 +42,7 @@ export function useDexData(account?: Address, enabled = false): DexDataState {
   const refresh = useCallback(async () => {
     const currentRequest = requestId.current + 1;
     requestId.current = currentRequest;
-    if (!enabled || !window.ethereum) {
+    if (!enabled || !provider) {
       setPools([]);
       setBalances([]);
       setLoading(false);
@@ -55,7 +55,7 @@ export function useDexData(account?: Address, enabled = false): DexDataState {
     setPools([]);
     setBalances([]);
     try {
-      const contracts = getReadContracts(window.ethereum);
+      const contracts = getReadContracts(provider);
       const rawPools = (await contracts.poolManager.getAllPools()) as Record<string, unknown>[];
       const normalizedPools = rawPools.map((pool) => normalizePool(toPoolInfo(pool))).filter((pool): pool is DisplayPool => Boolean(pool));
       if (requestId.current !== currentRequest) return;
@@ -89,7 +89,7 @@ export function useDexData(account?: Address, enabled = false): DexDataState {
       if (requestId.current !== currentRequest) return;
       setLoading(false);
     }
-  }, [account, enabled]);
+  }, [account, enabled, provider]);
 
   useEffect(() => {
     void refresh();

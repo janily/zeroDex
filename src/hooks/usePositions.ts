@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getReadContracts, getSigner } from "../lib/contracts";
 import { fetchPositionIdsFromZan } from "../services/zan";
 import type { Address } from "../types/domain";
-import "../types/ethereum";
+import type { EthereumProvider } from "../types/ethereum";
 
 export type PositionDetails = {
   id: string;
@@ -23,7 +23,7 @@ export function normalizePositionLookupError(caught: unknown, positionId: string
   return message || `Unable to query position ${positionId}`;
 }
 
-export function usePositions(account?: Address, enabled = false) {
+export function usePositions(account?: Address, enabled = false, provider?: EthereumProvider) {
   const [positions, setPositions] = useState<PositionDetails[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -41,9 +41,9 @@ export function usePositions(account?: Address, enabled = false) {
 
   const fetchManualPosition = useCallback(async (positionId: string) => {
     if (!/^\d+$/.test(positionId.trim())) throw new Error("Position ID must be a non-negative integer");
-    if (!window.ethereum) throw new Error("MetaMask is not installed");
-    const contracts = getReadContracts(window.ethereum);
-    const signer = await getSigner(window.ethereum);
+    if (!provider) throw new Error("zeroWallet is not installed");
+    const contracts = getReadContracts(provider);
+    const signer = await getSigner(provider);
     const positionManager = contracts.positionManager.connect(signer) as typeof contracts.positionManager;
     const normalizedId = BigInt(positionId.trim()).toString();
     try {
@@ -77,12 +77,12 @@ export function usePositions(account?: Address, enabled = false) {
     } catch (caught) {
       throw new Error(normalizePositionLookupError(caught, normalizedId));
     }
-  }, [account]);
+  }, [account, provider]);
 
   const refresh = useCallback(async () => {
     const currentRequest = requestId.current + 1;
     requestId.current = currentRequest;
-    if (!enabled || !window.ethereum) {
+    if (!enabled || !provider) {
       setPositions([]);
       setLoading(false);
       setError(undefined);
@@ -113,7 +113,7 @@ export function usePositions(account?: Address, enabled = false) {
       if (requestId.current !== currentRequest) return;
       setLoading(false);
     }
-  }, [enabled, fetchManualPosition, loadPositionIds]);
+  }, [enabled, fetchManualPosition, loadPositionIds, provider]);
 
   useEffect(() => {
     void refresh();

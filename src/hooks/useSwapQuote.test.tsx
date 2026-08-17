@@ -25,7 +25,7 @@ const pool = (index: number): DisplayPool => ({
 describe("useSwapQuote", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    window.ethereum = {
+    window.metaNodeWallet = {
       request: vi.fn(),
     };
   });
@@ -47,6 +47,7 @@ describe("useSwapQuote", () => {
           tokenOut: TOKENS[1].address,
           mode: "exact-input",
           amountIn,
+          provider: window.metaNodeWallet,
         }),
       { initialProps: { amountIn: 10n } },
     );
@@ -77,6 +78,7 @@ describe("useSwapQuote", () => {
         tokenOut: TOKENS[1].address,
         mode: "exact-input",
         amountIn: 10n,
+        provider: window.metaNodeWallet,
       }),
     );
 
@@ -113,6 +115,7 @@ describe("useSwapQuote", () => {
           tokenOut: TOKENS[1].address,
           mode: "exact-input",
           amountIn,
+          provider: window.metaNodeWallet,
         }),
       { initialProps: { amountIn: 10n } },
     );

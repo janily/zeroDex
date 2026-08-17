@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getReadContracts } from "../lib/contracts";
 import { resolveMissingAllowances, type AllowanceCheck } from "../lib/allowance";
 import type { Address } from "../types/domain";
-import "../types/ethereum";
+import type { EthereumProvider } from "../types/ethereum";
 
-export function useAllowances(owner?: Address, checks: AllowanceCheck[] = [], enabled = false) {
+export function useAllowances(owner?: Address, checks: AllowanceCheck[] = [], enabled = false, provider?: EthereumProvider) {
   const [missing, setMissing] = useState<AllowanceCheck[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -14,7 +14,7 @@ export function useAllowances(owner?: Address, checks: AllowanceCheck[] = [], en
   const refresh = useCallback(async () => {
     const currentRequest = requestId.current + 1;
     requestId.current = currentRequest;
-    if (!enabled || !owner || !window.ethereum || checks.length === 0) {
+    if (!enabled || !owner || !provider || checks.length === 0) {
       setMissing([]);
       setLoading(false);
       setError(undefined);
@@ -27,7 +27,7 @@ export function useAllowances(owner?: Address, checks: AllowanceCheck[] = [], en
     setError(undefined);
     setReady(false);
     try {
-      const contracts = getReadContracts(window.ethereum);
+      const contracts = getReadContracts(provider);
       const nextMissing = await resolveMissingAllowances(checks, async (token, spender) =>
           BigInt(await contracts.erc20(token).allowance(owner, spender)),
         );
@@ -42,7 +42,7 @@ export function useAllowances(owner?: Address, checks: AllowanceCheck[] = [], en
       if (requestId.current !== currentRequest) return;
       setLoading(false);
     }
-  }, [checks, enabled, owner]);
+  }, [checks, enabled, owner, provider]);
 
   useEffect(() => {
     void refresh();

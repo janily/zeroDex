@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Drawer } from "./components/Drawer";
 import { ContextPanel, Sidebar, Topbar } from "./components/layout";
+import { WalletSelector } from "./components/WalletSelector";
 import { TOKENS } from "./config/tokens";
 import { useDexData } from "./hooks/useDexData";
 import { usePositions } from "./hooks/usePositions";
@@ -9,6 +10,7 @@ import { useTransactions } from "./hooks/useTransactions";
 import { useWallet } from "./hooks/useWallet";
 import { formatTokenAmount, parseTokenAmount } from "./lib/amount";
 import { getWriteContracts } from "./lib/contracts";
+import { requestWallets } from "./lib/walletProvider";
 import { buildCreatePoolParams } from "./lib/createPool";
 import { buildSwapExecution } from "./lib/swapExecution";
 import type { SwapExecutionPayload } from "./lib/swapExecution";
@@ -63,12 +65,14 @@ export function App() {
   const [swapTokenIn, setSwapTokenIn] = useState<TokenAddress>(TOKENS[0].address);
   const [swapTokenOut, setSwapTokenOut] = useState<TokenAddress>(TOKENS[1].address);
   const [swapReviewSnapshot, setSwapReviewSnapshot] = useState<SwapReviewSnapshot>();
+  const [walletSelectorOpen, setWalletSelectorOpen] = useState(false);
+  const [busyWalletId, setBusyWalletId] = useState<string>();
 
   const wallet = useWallet();
   const isReady = wallet.status === "connected";
-  const transactions = useTransactions();
-  const dexData = useDexData(wallet.account, isReady);
-  const positionData = usePositions(wallet.account, isReady);
+  const transactions = useTransactions(wallet.provider);
+  const dexData = useDexData(wallet.account, isReady, wallet.provider);
+  const positionData = usePositions(wallet.account, isReady, wallet.provider);
   const activePools = dexData.pools.map(displayPoolToUiPool);
   const chainPositions = [
     ...positionData.positions,
@@ -114,6 +118,7 @@ export function App() {
     mode: swapMode === "input" ? "exact-input" : "exact-output",
     amountIn: parsedSwapIn,
     amountOut: parsedSwapOut,
+    provider: wallet.provider,
   });
   const swapExecution = useMemo(() => {
     if (swapMode === "input" && parsedSwapIn === undefined) return undefined;
@@ -212,10 +217,11 @@ export function App() {
   };
 
   const runTransaction: RunTransaction = async (kind, payload) => {
-    if (!isReady || !wallet.account || !window.ethereum) return;
+    const provider = wallet.provider;
+    if (!isReady || !wallet.account || !provider) return;
     await transactions.runWrite(
       async () => {
-        const contracts = await getWriteContracts(window.ethereum!);
+        const contracts = await getWriteContracts(provider);
         const deadline = BigInt(Math.floor(Date.now() / 1000) + 20 * 60);
 
         if (kind === "create" && payload?.type === "create") {
@@ -286,9 +292,9 @@ export function App() {
           account={wallet.account}
           status={wallet.status}
           error={wallet.error}
-          connect={wallet.connect}
+          connect={async () => setWalletSelectorOpen(true)}
           disconnect={wallet.disconnect}
-          switchAccount={wallet.switchAccount}
+          switchAccount={async () => setWalletSelectorOpen(true)}
           switchToSepolia={wallet.switchToSepolia}
           refresh={refreshAll}
           refreshing={dexData.loading || positionData.loading || swapQuote.loading}
@@ -396,8 +402,15 @@ export function App() {
           chainDataLoading={dexData.loading}
           runTransaction={runTransaction}
           isReady={isReady}
+          provider={wallet.provider}
         />
       )}
+      {walletSelectorOpen && <WalletSelector wallets={wallet.wallets} busyWalletId={busyWalletId} onRefresh={requestWallets} onClose={() => !busyWalletId && setWalletSelectorOpen(false)} onSelect={async (selected) => {
+        setBusyWalletId(selected.info.uuid);
+        await wallet.connect(selected);
+        setBusyWalletId(undefined);
+        setWalletSelectorOpen(false);
+      }} />}
     </main>
   );
 }

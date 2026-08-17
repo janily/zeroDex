@@ -160,7 +160,7 @@ export function ContextPanel({
 }
 
 function getWalletLabel(status: WalletStatus, account?: string) {
-  if (status === "missing") return "Install MetaMask";
+  if (status === "missing") return "Install zeroWallet";
   if (status === "wrong-network") return "Switch to Sepolia";
   if (status === "connected" && account) return `${account.slice(0, 6)}...${account.slice(-4)}`;
   return "Connect wallet";

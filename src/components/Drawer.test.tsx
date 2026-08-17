@@ -88,7 +88,7 @@ describe("Drawer transaction actions", () => {
     });
     const props = renderDrawer({ txStage: "success" });
 
-    expect(mocks.useAllowances).toHaveBeenLastCalledWith(props.walletAccount, expect.any(Array), false);
+    expect(mocks.useAllowances).toHaveBeenLastCalledWith(props.walletAccount, expect.any(Array), false, undefined);
     expect(screen.queryByText("Approval required")).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Close review" }));

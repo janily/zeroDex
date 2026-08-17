@@ -1,6 +1,6 @@
 # zeroDex
 
-zeroDex is a Sepolia-only MetaNodeSwap frontend. It started as a Linear-style interactive prototype and is being upgraded into a real DEX frontend that connects MetaMask, reads deployed contracts, quotes swaps, handles ERC20 approvals, and manages LP NFT positions.
+zeroDex is a Sepolia-only MetaNodeSwap frontend. It started as a Linear-style interactive prototype and is being upgraded into a real DEX frontend that connects zeroWallet, reads deployed contracts, quotes swaps, handles ERC20 approvals, and manages LP NFT positions.
 
 ## Quick Start
 
@@ -20,11 +20,11 @@ npm run build
 
 ## Wallet And Network
 
-- Wallet: MetaMask
+- Wallet: zeroWallet (EIP-6963)
 - Network: Sepolia
 - Chain ID: `11155111`
 
-The app remains browsable without a wallet. Write actions require MetaMask connected to Sepolia.
+The app remains browsable without a wallet. Write actions require zeroWallet connected to Sepolia.
 
 ## Optional ZAN Position Lookup
 
@@ -63,7 +63,7 @@ Current implemented layers:
 - Minimal ABI fragments
 - bigint amount utilities
 - price/pool/routing/allowance utilities
-- MetaMask wallet state hook
+- zeroWallet wallet state hook
 - ethers contract factories
 - PoolManager and ERC20 balance read hook
 - swap quote and transaction state hooks
