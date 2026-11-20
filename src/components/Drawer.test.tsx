@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TOKENS } from "../config/tokens";
@@ -66,6 +66,23 @@ describe("Drawer transaction actions", () => {
       refresh: vi.fn(async () => undefined),
       next: undefined,
     });
+  });
+
+  it("dismisses a review without approving or signing when the dialog is cancelled", () => {
+    const props = renderDrawer();
+    fireEvent(screen.getByRole("dialog", { name: "Review swap" }), new Event("cancel", { cancelable: true }));
+
+    expect(props.onClose).toHaveBeenCalledOnce();
+    expect(props.approveToken).not.toHaveBeenCalled();
+    expect(props.runTransaction).not.toHaveBeenCalled();
+  });
+
+  it("submits the reviewed swap when all allowances are satisfied", async () => {
+    const props = renderDrawer();
+    await userEvent.click(screen.getByRole("button", { name: "Confirm swap" }));
+
+    expect(props.runTransaction).toHaveBeenCalledWith("swap", props.swapExecution);
+    expect(props.approveToken).not.toHaveBeenCalled();
   });
 
   it("closes after a completed write instead of submitting it again", async () => {

@@ -1,0 +1,347 @@
+html:has(.dex-modal[open]) {
+  overflow: hidden;
+}
+
+.dex-modal {
+  padding: 0;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: 0 22px 80px rgb(19 45 54 / 20%);
+}
+
+.dex-modal[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.dex-modal::backdrop {
+  background: rgb(20 46 54 / 42%);
+  backdrop-filter: blur(3px);
+}
+
+.dex-modal-dialog {
+  width: min(410px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  border-radius: 16px;
+}
+
+.dex-modal-drawer {
+  width: min(460px, 100%);
+  height: 100dvh;
+  max-width: 100%;
+  max-height: 100%;
+  margin: 0 0 0 auto;
+  border-width: 0 0 0 1px;
+}
+
+.modal-header,
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
+  gap: 12px;
+  padding: 20px 24px;
+}
+
+.modal-header {
+  border-bottom: 1px solid var(--line);
+}
+
+.modal-header h2 {
+  color: var(--ink);
+  font-size: 23px;
+  letter-spacing: -.04em;
+}
+
+.modal-header .label {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.modal-footer {
+  border-top: 1px solid var(--line);
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
+}
+
+.modal-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 24px;
+  overscroll-behavior: contain;
+}
+
+.wallet-list,
+.review-body .form-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.wallet-choice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 64px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+}
+
+.wallet-choice:not(:disabled):hover,
+.wallet-choice:not(:disabled):active {
+  border-color: var(--accent);
+  background: var(--canvas);
+}
+
+.wallet-provider-icon,
+.wallet-empty-symbol {
+  display: grid;
+  place-items: center;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  overflow: hidden;
+  color: var(--accent);
+  background: var(--canvas);
+}
+
+.wallet-provider-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.wallet-choice-details {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+
+.wallet-choice-details small,
+.wallet-progress,
+.wallet-unavailable p {
+  color: var(--muted);
+}
+
+.wallet-unavailable {
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  padding: 16px 0;
+  text-align: center;
+}
+
+.wallet-empty-symbol {
+  width: 52px;
+  height: 52px;
+  margin-bottom: 6px;
+  border-radius: 15px;
+}
+
+.wallet-unavailable p {
+  max-width: 260px;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.wallet-list + .modal-footer {
+  justify-content: center;
+}
+
+.review-body {
+  flex: 1;
+}
+
+.review-body .form-stack {
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.review-body .form-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.review-body .field,
+.review-body .token-amount {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+}
+
+.review-body .field label,
+.review-body .field > span,
+.review-body .token-amount > span {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.review-body .field small,
+.review-body .token-amount small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.review-body .token-amount > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.review-body .field input,
+.review-body .field select,
+.review-body .token-amount input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.review-body .field input:focus-visible,
+.review-body .field select:focus-visible,
+.review-body .token-amount input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.review-body .token-badge {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--canvas);
+  color: var(--ink);
+}
+
+.review-summary,
+.review-amounts {
+  display: grid;
+  gap: 12px;
+  overflow-wrap: anywhere;
+}
+
+.review-summary .metric {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.review-summary .metric strong {
+  text-align: right;
+}
+
+.review-amounts {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--canvas);
+}
+
+.review-amounts .metric + .metric {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.review-amounts .metric strong {
+  font-size: 20px;
+}
+
+.review-body .compact-error,
+.review-body .chain-banner {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--canvas);
+  color: var(--ink);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.review-body .compact-error {
+  border-color: #e6cbbb;
+  background: #fff6ed;
+  color: #7d4528;
+}
+
+.review-body .compact-error > div,
+.review-body .chain-banner > div {
+  display: grid;
+  gap: 2px;
+}
+
+.review-body .compact-error svg,
+.review-body .chain-banner svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.review-body .chain-banner svg:not(.lucide-loader-circle) {
+  animation: none;
+}
+
+.review-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.review-footer .primary-button {
+  min-height: 44px;
+}
+
+@media (max-height: 450px) {
+  .dex-modal[open] {
+    display: block;
+    overflow-y: auto;
+  }
+  .modal-body {
+    overflow: visible;
+  }
+}
+
+@media (max-width: 480px) {
+  .modal-header,
+  .modal-body,
+  .modal-footer {
+    padding-inline: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dex-modal-drawer[open] {
+    animation: open-drawer 160ms ease-out;
+  }
+  .wallet-spinner,
+  .review-body .lucide-loader-circle {
+    animation: wallet-spin 1s linear infinite;
+  }
+  @keyframes open-drawer {
+    from { transform: translateX(22px); opacity: .6; }
+  }
+  @keyframes wallet-spin {
+    to { transform: rotate(360deg); }
+  }
+}

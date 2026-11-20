@@ -1,4 +1,4 @@
-import { ShieldCheck, Loader2, X } from "lucide-react";
+import { CircleAlert, Info, ShieldCheck, Loader2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { TOKENS } from "../config/tokens";
 import { useAllowances } from "../hooks/useAllowances";
@@ -12,6 +12,7 @@ import type { Address, DisplayPool, TransactionStage } from "../types/domain";
 import type { EthereumProvider } from "../types/ethereum";
 import type { CreateDrawerState, DrawerType, LiquidityDrawerState, RunTransaction } from "../types/app";
 import type { Pool } from "../types/ui";
+import { Modal } from "./Modal";
 import { TxTimeline } from "./common";
 import { CreatePoolForm, LiquidityForm, SwapDrawerForm } from "./forms";
 
@@ -77,6 +78,9 @@ export function Drawer({
     amount0: "",
     amount1: "",
   });
+  const awaitingRates = !createForm.initialRate && !createForm.minRate && !createForm.maxRate
+    && createForm.tokenA !== createForm.tokenB && createForm.feePercent === "0.30%";
+  const awaitingAmounts = !liquidityForm.amount0 && !liquidityForm.amount1;
   const title = type === "create" ? "Create pool" : type === "liquidity" ? "Add liquidity" : "Review swap";
   const action = type === "create" ? "create" : type === "liquidity" ? "mint" : "swap";
   const payload = type === "create" ? createForm : type === "liquidity" ? liquidityForm : swapExecution;
@@ -159,21 +163,21 @@ export function Drawer({
     ? "Connect wallet"
     : completedWrite
       ? "Close review"
-    : nextAllowance
+    : nextAllowance && !transactionPending
       ? `Approve ${tokenSymbol(nextAllowance.token)}`
       : primaryLabel(type, txStage);
   return (
-    <div className="drawer-backdrop">
-      <aside className="drawer">
-        <header className="drawer-head">
-          <div>
-            <span className="label">{selectedPool.pair}</span>
-            <h2>{title}</h2>
-          </div>
-          <button className="icon-button" onClick={onClose} title="Close">
-            <X size={16} />
-          </button>
-        </header>
+    <Modal variant="drawer" labelledBy="review-drawer-title" onClose={onClose}>
+      <header className="modal-header">
+        <div>
+          <h2 id="review-drawer-title">{title}</h2>
+          {type !== "create" && <span className="label">{selectedPool.pair}</span>}
+        </div>
+        <button className="icon-button" onClick={onClose} title="Close" aria-label={`Close ${title.toLowerCase()}`}>
+          <X size={16} />
+        </button>
+      </header>
+      <div className="modal-body review-body">
         {type === "create" ? (
           <CreatePoolForm value={createForm} onChange={setCreateForm} />
         ) : type === "liquidity" ? (
@@ -188,8 +192,8 @@ export function Drawer({
           <SwapDrawerForm selectedPool={selectedPool} summary={swapSummary} />
         )}
         {!selectedDisplayPool && type !== "create" && (
-          <div className="inline-error compact-error">
-            <X size={16} />
+          <div className="inline-error compact-error" role="status">
+            <CircleAlert size={17} aria-hidden="true" />
             <div>
               <strong>Chain pool required</strong>
               <span>Connect Sepolia and refresh pools before submitting this write.</span>
@@ -197,26 +201,26 @@ export function Drawer({
           </div>
         )}
         {type === "create" && createError && (
-          <div className="inline-error compact-error">
-            <X size={16} />
+          <div className={awaitingRates ? "chain-banner" : "inline-error compact-error"} role="status">
+            <Info size={17} aria-hidden="true" />
             <div>
-              <strong>Invalid pool parameters</strong>
-              <span>{createError}</span>
+              <strong>{awaitingRates ? "Set the price range" : "Invalid pool parameters"}</strong>
+              <span>{awaitingRates ? "Enter an initial rate between the minimum and maximum." : createError}</span>
             </div>
           </div>
         )}
         {type === "liquidity" && liquidityValidation.error && (
-          <div className="inline-error compact-error">
-            <X size={16} />
+          <div className={awaitingAmounts ? "chain-banner" : "inline-error compact-error"} role="status">
+            <Info size={17} aria-hidden="true" />
             <div>
-              <strong>Invalid liquidity amounts</strong>
-              <span>{liquidityValidation.error}</span>
+              <strong>{awaitingAmounts ? "Enter both amounts" : "Invalid liquidity amounts"}</strong>
+              <span>{awaitingAmounts ? "Specify how much of each token to add to this pool." : liquidityValidation.error}</span>
             </div>
           </div>
         )}
         {type === "liquidity" && !liquidityValidation.error && !mintBalancesKnown && (
-          <div className="inline-error compact-error">
-            <X size={16} />
+          <div className="inline-error compact-error" role="status">
+            <CircleAlert size={17} aria-hidden="true" />
             <div>
               <strong>Balances unavailable</strong>
               <span>Refresh chain data before minting.</span>
@@ -224,8 +228,8 @@ export function Drawer({
           </div>
         )}
         {type === "liquidity" && !liquidityValidation.error && mintBalancesKnown && !mintHasBalances && (
-          <div className="inline-error compact-error">
-            <X size={16} />
+          <div className="inline-error compact-error" role="status">
+            <CircleAlert size={17} aria-hidden="true" />
             <div>
               <strong>Insufficient balance</strong>
               <span>Both token balances must cover the desired amounts.</span>
@@ -233,8 +237,8 @@ export function Drawer({
           </div>
         )}
         {type === "swap" && !swapExecution && (
-          <div className="inline-error compact-error">
-            <X size={16} />
+          <div className="inline-error compact-error" role="status">
+            <CircleAlert size={17} aria-hidden="true" />
             <div>
               <strong>Swap quote required</strong>
               <span>Select a tradable route and enter a valid amount before submitting.</span>
@@ -242,8 +246,8 @@ export function Drawer({
           </div>
         )}
         {type === "swap" && swapExecution && !swapInputBalanceKnown && (
-          <div className="inline-error compact-error">
-            <X size={16} />
+          <div className="inline-error compact-error" role="status">
+            <CircleAlert size={17} aria-hidden="true" />
             <div>
               <strong>Balance unavailable</strong>
               <span>Refresh chain data before submitting this swap.</span>
@@ -251,8 +255,8 @@ export function Drawer({
           </div>
         )}
         {type === "swap" && swapExecution && swapInputBalanceKnown && !swapHasInputBalance && (
-          <div className="inline-error compact-error">
-            <X size={16} />
+          <div className="inline-error compact-error" role="status">
+            <CircleAlert size={17} aria-hidden="true" />
             <div>
               <strong>Insufficient balance</strong>
               <span>Your input token balance does not cover this swap.</span>
@@ -260,8 +264,8 @@ export function Drawer({
           </div>
         )}
         {txError && (
-          <div className="inline-error compact-error">
-            <X size={16} />
+          <div className="inline-error compact-error" role="status">
+            <CircleAlert size={17} aria-hidden="true" />
             <div>
               <strong>Transaction failed</strong>
               <span>{txError}</span>
@@ -269,8 +273,8 @@ export function Drawer({
           </div>
         )}
         {txSyncError && (
-          <div className="chain-banner">
-            <Loader2 size={16} />
+          <div className="chain-banner" role="status">
+            <Info size={16} />
             <div>
               <strong>Transaction confirmed; refresh incomplete</strong>
               <span>{txSyncError}</span>
@@ -278,8 +282,8 @@ export function Drawer({
           </div>
         )}
         {(allowances.loading || allowances.error || nextAllowance) && (
-          <div className={allowances.error ? "inline-error compact-error" : "chain-banner"}>
-            {allowances.error ? <X size={16} /> : allowances.loading ? <Loader2 size={16} /> : <ShieldCheck size={16} />}
+          <div role="status" className={allowances.error ? "inline-error compact-error" : "chain-banner"}>
+            {allowances.error ? <CircleAlert size={16} /> : allowances.loading ? <Loader2 size={16} /> : <ShieldCheck size={16} />}
             <div>
               <strong>{allowances.error ? "Allowance check failed" : allowances.loading ? "Checking allowances" : "Approval required"}</strong>
               <span>
@@ -291,9 +295,12 @@ export function Drawer({
             </div>
           </div>
         )}
+      </div>
+      <footer className="modal-footer review-footer">
         <TxTimeline stage={txStage} />
         <button
           className="primary-button wide"
+          aria-busy={transactionPending || allowances.loading}
           disabled={!completedWrite && (!canSubmit || allowances.loading || transactionPending)}
           onClick={() => {
             if (completedWrite) {
@@ -314,8 +321,8 @@ export function Drawer({
         >
           {primaryText}
         </button>
-      </aside>
-    </div>
+      </footer>
+    </Modal>
   );
 }
 
@@ -325,6 +332,6 @@ function primaryLabel(type: DrawerType, stage: TransactionStage) {
   if (stage === "confirming") return "Confirming";
   if (stage === "success") return "Close review";
   if (type === "create") return "Create pool";
-  if (type === "liquidity") return "Approve and mint";
-  return "Approve and swap";
+  if (type === "liquidity") return "Mint position";
+  return "Confirm swap";
 }

@@ -1,0 +1,243 @@
+.swap-workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1.18fr) minmax(0, 0.82fr);
+  align-items: start;
+  gap: 20px;
+}
+
+.swap-ticket,
+.swap-routing {
+  min-width: 0;
+  padding: clamp(18px, 2.2vw, 30px);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.swap-ticket-header,
+.swap-route-heading,
+.swap-candidate-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.swap-ticket-header {
+  flex-wrap: wrap;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.swap-ticket h2,
+.swap-routing h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 18px;
+  letter-spacing: -.035em;
+}
+
+.swap-modes {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--canvas);
+}
+
+.swap-modes button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.swap-modes button[aria-pressed="true"] {
+  border-color: var(--line);
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgb(18 52 51 / 8%);
+  color: var(--ink);
+}
+
+.swap-modes button:hover { color: var(--accent); }
+.swap-legs { display: grid; }
+
+.swap-leg {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  padding: 17px 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--canvas);
+}
+
+.swap-leg.editable:focus-within { border-color: var(--accent); }
+.swap-leg.estimated { background: var(--surface); }
+
+.swap-leg .token-amount {
+  grid-area: 1 / 1 / 2 / 3;
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  margin: 0;
+}
+
+.swap-leg .token-amount > span {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.swap-leg .token-amount > div {
+  display: block;
+  padding-inline-end: 108px;
+}
+
+.swap-leg .token-amount input {
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink);
+  font-size: clamp(24px, 3vw, 38px);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: -.05em;
+}
+
+.swap-leg .token-amount input::placeholder { color: var(--muted); opacity: .85; }
+.swap-leg .token-amount small { color: var(--muted); font-size: 12px; }
+.swap-leg .token-amount .token-badge,
+.swap-asset-picker .field > span {
+  position: absolute;
+  overflow: hidden;
+  clip-path: inset(50%);
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  white-space: nowrap;
+}
+
+.swap-asset-picker {
+  position: relative;
+  grid-area: 1 / 2;
+  align-self: center;
+}
+
+.swap-asset-picker .field { display: block; margin: 0; }
+.swap-asset-picker .field select {
+  width: auto;
+  min-height: 38px;
+  padding: 0 30px 0 12px;
+  appearance: none;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.swap-asset-picker .field select:hover { border-color: var(--accent); }
+.swap-asset-picker > svg {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  color: var(--muted);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.swap-reverse-row {
+  display: grid;
+  place-items: center;
+  height: 8px;
+  z-index: 1;
+}
+
+.swap-reverse {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  align-self: center;
+  margin-top: -14px;
+  background: var(--surface);
+  color: var(--accent);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 0 0 3px var(--surface);
+}
+
+.swap-reverse:hover { border-color: var(--accent); }
+.swap-ticket .swap-cta { width: 100%; min-height: 46px; margin-top: 16px; }
+.swap-ticket .swap-review-hint { margin: 10px 0 0; color: var(--muted); font-size: 13px; }
+.swap-route-heading > svg { color: var(--accent); }
+
+.swap-route-map {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 20px 0 12px;
+  padding: 20px 16px;
+  border-radius: 10px;
+  background: var(--canvas);
+  color: var(--muted);
+}
+
+.swap-route-map span {
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.swap-route-map i { flex: 1; border-top: 1px dashed currentColor; }
+.swap-route-map.quoted { color: var(--accent); }
+.swap-route-map.quoted i { border-top-style: solid; }
+.swap-metrics { display: grid; gap: 10px; padding: 8px 0 20px; }
+.swap-metrics .metric { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.swap-metrics .metric span { color: var(--muted); font-size: 13px; }
+.swap-metrics .metric strong { color: var(--ink); font-size: 13px; overflow-wrap: anywhere; text-align: right; }
+
+.swap-candidate-heading { border-top: 1px solid var(--line); padding-top: 18px; }
+.swap-candidate-heading h3 { margin: 0; font-size: 14px; font-weight: 650; }
+.swap-candidate-heading span { padding: 2px 7px; border-radius: 5px; background: var(--canvas); color: var(--muted); font-size: 12px; }
+.swap-routing-empty { margin: 10px 0 0; font-size: 13px; color: var(--muted); }
+.swap-routing .swap-candidate {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.swap-routing .swap-candidate:last-child { border-bottom: 0; padding-bottom: 0; }
+.swap-candidate div { display: grid; gap: 3px; min-width: 0; overflow-wrap: anywhere; }
+.swap-candidate strong { font-size: 13px; }
+.swap-routing .swap-candidate span, .swap-candidate small { color: var(--muted); font-size: 12px; }
+.swap-candidate small { white-space: nowrap; }
+.swap-candidate .best { color: var(--accent); font-weight: 650; }
+
+@media (max-width: 800px) {
+  .swap-workbench { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+}
+
+@media (max-width: 450px) {
+  .swap-ticket, .swap-routing { padding: 16px; }
+  .swap-leg { padding: 14px; }
+  .swap-ticket-header { margin-bottom: 14px; }
+  .swap-modes button { padding: 0 8px; }
+}

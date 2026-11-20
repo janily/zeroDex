@@ -8,12 +8,16 @@ export function CreatePoolForm({ value, onChange }: { value: CreateDrawerState; 
   const tokenBSymbol = TOKENS.find((token) => token.address === value.tokenB)?.symbol ?? "Token B";
   return (
     <div className="form-stack">
-      <TokenSelect label="Token A" value={value.tokenA} onChange={(tokenA) => onChange({ ...value, tokenA })} />
-      <TokenSelect label="Token B" value={value.tokenB} onChange={(tokenB) => onChange({ ...value, tokenB })} />
-      <InputBlock label="Fee tier" value={value.feePercent} onChange={(feePercent) => onChange({ ...value, feePercent })} helper="Sorted token order is handled before contract call." />
+      <div className="form-pair">
+        <TokenSelect label="Token A" value={value.tokenA} onChange={(tokenA) => onChange({ ...value, tokenA })} />
+        <TokenSelect label="Token B" value={value.tokenB} onChange={(tokenB) => onChange({ ...value, tokenB })} />
+      </div>
+      <InputBlock label="Fee tier" value={value.feePercent} onChange={(feePercent) => onChange({ ...value, feePercent })} helper="Percentage charged on each swap." />
       <InputBlock label={`Initial rate (${tokenBSymbol} per ${tokenASymbol})`} value={value.initialRate} onChange={(initialRate) => onChange({ ...value, initialRate })} />
-      <InputBlock label="Minimum rate" value={value.minRate} onChange={(minRate) => onChange({ ...value, minRate })} />
-      <InputBlock label="Maximum rate" value={value.maxRate} onChange={(maxRate) => onChange({ ...value, maxRate })} />
+      <div className="form-pair">
+        <InputBlock label="Minimum rate" value={value.minRate} onChange={(minRate) => onChange({ ...value, minRate })} />
+        <InputBlock label="Maximum rate" value={value.maxRate} onChange={(maxRate) => onChange({ ...value, maxRate })} />
+      </div>
     </div>
   );
 }
@@ -33,11 +37,14 @@ export function LiquidityForm({
 }) {
   return (
     <div className="form-stack">
-      <InputBlock label="Pool" value={`${selectedPool.pair} #${selectedPool.index}`} helper={`Fixed range ${selectedPool.range}`} />
+      <div className="review-summary">
+        <Metric label="Pool" value={`${selectedPool.pair} #${selectedPool.index}`} />
+        <Metric label="Fixed range" value={selectedPool.range} />
+      </div>
       <TokenAmount label={`${selectedPool.token0} amount`} token={selectedPool.token0} value={value.amount0} onChange={(amount0) => onChange({ ...value, amount0 })} helper={balance0Label} />
       <TokenAmount label={`${selectedPool.token1} amount`} token={selectedPool.token1} value={value.amount1} onChange={(amount1) => onChange({ ...value, amount1 })} helper={balance1Label} />
-      <div className="quote-box">
-        <Metric label="Desired amounts" value={`${value.amount0} ${selectedPool.token0} / ${value.amount1} ${selectedPool.token1}`} />
+      <div className="review-summary">
+        <Metric label="Desired amounts" value={`${value.amount0 || "—"} ${selectedPool.token0} / ${value.amount1 || "—"} ${selectedPool.token1}`} />
         <Metric label="Approve target" value="PositionManager" />
       </div>
     </div>
@@ -58,10 +65,14 @@ export function SwapDrawerForm({
 }) {
   return (
     <div className="form-stack">
-      <InputBlock label="Route" value={summary?.route ?? `${selectedPool.pair} #${selectedPool.index}`} helper="Best compatible path selected from the latest quote." />
-      <InputBlock label="Pay" value={summary?.pay ?? "Quote required"} />
-      <InputBlock label="Receive" value={summary?.receive ?? "Quote required"} />
-      <InputBlock label="Slippage" value={summary?.slippage ?? "0.50%"} />
+      <div className="review-amounts">
+        <Metric label="Pay" value={summary?.pay ?? "Quote required"} />
+        <Metric label="Receive" value={summary?.receive ?? "Quote required"} />
+      </div>
+      <div className="review-summary">
+        <Metric label="Route" value={summary?.route ?? `${selectedPool.pair} #${selectedPool.index}`} />
+        <Metric label="Slippage" value={summary?.slippage ?? "0.50%"} />
+      </div>
     </div>
   );
 }

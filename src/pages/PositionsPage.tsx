@@ -1,7 +1,11 @@
-import { Database, Loader2, Plus, X } from "lucide-react";
+import { useState } from "react";
+import { ArrowRight, CircleAlert, ExternalLink, Layers3, Loader2, Plus, Search, Wallet } from "lucide-react";
 import type { OpenDrawer, RunTransaction } from "../types/app";
 import type { Position } from "../types/ui";
 import { Metric } from "../components/common";
+import { PageHeader } from "../components/layout";
+import { WorkspaceState } from "../components/WorkspaceState";
+import "../workspace-pages.css";
 
 export function PositionsPage(props: {
   manualPosition: string;
@@ -18,92 +22,80 @@ export function PositionsPage(props: {
   isReady: boolean;
   showManualLookup: boolean;
   queryManualPosition: (positionId: string) => Promise<void>;
+  onConnect: () => void;
+  onConnectLabel: string;
 }) {
+  const [lookingUp, setLookingUp] = useState(false);
   return (
-    <section className="main-column full">
-      <div className="section-header">
-        <div>
-          <h2>Positions</h2>
-          <p>LP NFTs created through PositionManager. Indexed through ZAN, with manual positionId lookup as fallback.</p>
-        </div>
-        <div className="inline-actions">
-          <button className="primary-button" onClick={() => props.openDrawer("liquidity")} disabled={!props.canAddLiquidity}>
-            <Plus size={16} /> Add liquidity
-          </button>
-        </div>
-      </div>
-      {!props.isReady && <div className="chain-banner"><Database size={16} /><div><strong>Chain data paused</strong><span>Connect a Sepolia wallet to load positions owned by your account.</span></div></div>}
-      {(props.positionsLoading || props.positionsError) && (
-        <div className={props.positionsError ? "inline-error compact-error" : "chain-banner"}>
-          {props.positionsError ? <X size={16} /> : <Loader2 size={16} />}
-          <div>
-            <strong>{props.positionsError ? "Position lookup warning" : "Loading LP positions"}</strong>
-            <span>{props.positionsError ?? "Reading ZAN NFT IDs, then PositionManager.getPositionInfo for each ID."}</span>
-          </div>
-        </div>
-      )}
-      {props.showManualLookup && (
-        <div className="inline-error">
-          <X size={16} />
-          <div>
-            <strong>Manual position lookup</strong>
-            <span>This page is functional, but no owned PositionManager NFT was indexed for this wallet. Mint liquidity or enter an owned positionId from the mint transaction NFT Transfer log.</span>
-          </div>
-          <input value={props.manualPosition} onChange={(event) => props.setManualPosition(event.target.value)} placeholder="positionId" />
-          <button className="secondary-button" onClick={() => void props.queryManualPosition(props.manualPosition)}>
-            Query
-          </button>
-          <a
-            className="subtle-link"
-            href="https://sepolia.etherscan.io/address/0xbe766Bf20eFfe431829C5d5a2744865974A0B610#tokentxnsErc721"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Find positionId
-          </a>
-        </div>
-      )}
-      {props.manualPositionError && <div className="inline-error compact-error"><X size={16} /><div><strong>Position lookup failed</strong><span>{props.manualPositionError}</span></div></div>}
-      <div className="position-grid">
-        {props.positions.length === 0 && !props.positionsLoading && (
-          <div className="empty-state"><Database size={24} /><strong>{props.isReady ? "No positions found" : "Connect wallet to load positions"}</strong><span>{props.isReady ? "Positions appear after you mint liquidity through PositionManager, or after you query an owned positionId manually." : "Position data is read from Sepolia and the configured NFT indexer."}</span></div>
+    <div className="market-page">
+      <PageHeader title="Positions" description="Manage your liquidity positions and collect tokens owed to your wallet." action={
+        <button className="primary-button" onClick={() => props.openDrawer("liquidity")} disabled={!props.canAddLiquidity}>
+          <Plus size={17} /> Add liquidity
+        </button>
+      } />
+      <section className="market-card" aria-labelledby="positions-title">
+        <header className="market-card-heading"><Layers3 size={19} aria-hidden="true" /><h2 id="positions-title">Your positions</h2>
+          {props.isReady && !props.positionsLoading && !props.positionsError && <span className="market-count">{props.positions.length} {props.positions.length === 1 ? "position" : "positions"}</span>}
+        </header>
+        {props.positionsError && (
+          <div className="market-notice" role="alert"><CircleAlert size={17} /><div><strong>Position lookup warning</strong><p>{props.positionsError}</p></div></div>
         )}
-        {props.positions.map((position) => {
-          const isOwned = Boolean(
-            props.canWritePositions &&
-              props.walletAccount &&
-              position.owner &&
-              props.walletAccount.toLowerCase() === position.owner.toLowerCase(),
-          );
-          const action = position.status === "Active" ? "burn" : position.status === "Collectable" ? "collect" : undefined;
-          return (
-          <article className="position-row" key={position.id}>
-            <div>
-              <span className="label">{position.id}</span>
-              <strong>{position.pair}</strong>
-            </div>
-            <Metric label="Pool" value={`#${position.poolIndex}`} />
-            <Metric label="Range" value={position.range} />
-            <Metric label="Liquidity" value={position.liquidity} />
-            <Metric label="Owed" value={`${position.owed0} / ${position.owed1}`} />
-            <span className={`position-status ${position.status.toLowerCase()}`}>{position.status}</span>
-            <button
-              className="secondary-button"
-              disabled={!isOwned || !action}
-              onClick={() => {
-                if (!action) return;
-                void props.runTransaction(action, {
-                  type: "position",
-                  positionId: position.id.replace("#", ""),
-                });
-              }}
-            >
-              {position.status === "Active" ? "Burn" : position.status === "Collectable" ? "Collect" : "Closed"}
-            </button>
-          </article>
-          );
-        })}
-      </div>
-    </section>
+        {!props.positions.length && (
+          !props.isReady ? <WorkspaceState icon={Wallet} title="Connect to view positions" description="Connect your wallet to load the liquidity positions you own on Sepolia." action={
+            <button className="primary-button" onClick={props.onConnect}>{props.onConnectLabel}<ArrowRight size={15} /></button>
+          } /> :
+          props.positionsLoading ? <WorkspaceState icon={Loader2} title="Loading positions" description="Looking up your position NFTs and reading their on-chain details." loading /> :
+          <WorkspaceState icon={Layers3} title="No positions to display" description="Add liquidity to mint a position, or look up an existing position by its ID." />
+        )}
+        <div className="owned-positions">
+          {props.positions.map((position) => {
+            const isOwned = Boolean(props.canWritePositions && props.walletAccount && position.owner &&
+              props.walletAccount.toLowerCase() === position.owner.toLowerCase());
+            const action = position.status === "Active" ? "burn" : position.status === "Collectable" ? "collect" : undefined;
+            return (
+              <article className="owned-position" key={position.id}>
+                <header>
+                  <div><span className="label">Position {position.id}</span><h3>{position.pair}</h3></div>
+                  <span className={`position-status ${position.status.toLowerCase()}`}>{position.status}</span>
+                </header>
+                <div className="position-metrics">
+                  <Metric label="Pool index" value={`#${position.poolIndex}`} />
+                  <Metric label="Tick range" value={position.range} />
+                  <Metric label="Liquidity" value={position.liquidity} />
+                  <Metric label="Tokens owed" value={`${position.owed0} / ${position.owed1}`} />
+                </div>
+                <button className="secondary-button" disabled={!isOwned || !action} onClick={() => {
+                  if (action) void props.runTransaction(action, { type: "position", positionId: position.id.replace("#", "") });
+                }}>{position.status === "Active" ? "Burn" : position.status === "Collectable" ? "Collect" : "Closed"}</button>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+      {props.showManualLookup && (
+        <section className="market-card" aria-labelledby="lookup-title">
+          <header className="market-card-heading"><Search size={19} aria-hidden="true" /><h2 id="lookup-title">Find a position by ID</h2></header>
+          <div className="manual-lookup">
+            <p>Enter the NFT ID from your mint transaction to look up a position owned by this wallet.</p>
+            <form noValidate onSubmit={async (event) => {
+              event.preventDefault();
+              if (lookingUp) return;
+              setLookingUp(true);
+              try { await props.queryManualPosition(props.manualPosition); } finally { setLookingUp(false); }
+            }}>
+              <label className="field"><span>Position ID</span>
+                <input inputMode="numeric" value={props.manualPosition} onChange={(event) => props.setManualPosition(event.target.value)}
+                  aria-invalid={Boolean(props.manualPositionError)} aria-describedby={props.manualPositionError ? "lookup-error" : undefined} />
+              </label>
+              <button className="secondary-button" type="submit" disabled={lookingUp} aria-busy={lookingUp}>{lookingUp ? "Looking up…" : "Find position"}</button>
+            </form>
+            {props.manualPositionError && <p id="lookup-error" role="alert" className="manual-error">{props.manualPositionError}</p>}
+            <a href="https://sepolia.etherscan.io/address/0xbe766Bf20eFfe431829C5d5a2744865974A0B610#tokentxnsErc721" target="_blank" rel="noreferrer">
+              Find NFT transfers on Etherscan <ExternalLink size={13} />
+            </a>
+          </div>
+        </section>
+      )}
+    </div>
   );
 }
