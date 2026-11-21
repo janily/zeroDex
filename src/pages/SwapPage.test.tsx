@@ -71,6 +71,16 @@ describe("SwapPage", () => {
     expect(props.openDrawer).toHaveBeenCalledWith("swap");
   });
 
+  it("uses the wallet action when disconnected without opening transaction review", async () => {
+    const onConnect = vi.fn();
+    const props = renderSwapPage({ isReady: false, canReview: false, onConnect, onConnectLabel: "Switch to Sepolia" });
+
+    await userEvent.click(screen.getByRole("button", { name: "Switch to Sepolia" }));
+
+    expect(onConnect).toHaveBeenCalledOnce();
+    expect(props.openDrawer).not.toHaveBeenCalled();
+  });
+
   it("updates the editable pay amount", async () => {
     const props = renderSwapPage();
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Drawer } from "./components/Drawer";
-import { ContextPanel, Sidebar, Topbar } from "./components/layout";
+import { ContextPanel, NetworkFooter, Topbar } from "./components/layout";
 import { WalletSelector } from "./components/WalletSelector";
 import { TOKENS } from "./config/tokens";
 import { useDexData } from "./hooks/useDexData";
@@ -284,23 +284,30 @@ export function App() {
     );
   };
 
+  const onConnect = wallet.status === "wrong-network" ? wallet.switchToSepolia : () => setWalletSelectorOpen(true);
+  const onConnectLabel = wallet.status === "wrong-network" ? "Switch to Sepolia" : "Connect wallet";
+
   return (
-    <main className="shell">
-      <Sidebar page={page} setPage={setPage} />
-      <section className="workspace">
-        <Topbar
-          account={wallet.account}
-          status={wallet.status}
-          error={wallet.error}
-          connect={async () => setWalletSelectorOpen(true)}
-          disconnect={wallet.disconnect}
-          switchAccount={async () => setWalletSelectorOpen(true)}
-          switchToSepolia={wallet.switchToSepolia}
-          refresh={refreshAll}
-          refreshing={dexData.loading || positionData.loading || swapQuote.loading}
-        />
+    <div className="shell">
+      <a className="skip-link" href="#workspace">Skip to workspace</a>
+      <Topbar
+        page={page}
+        setPage={setPage}
+        account={wallet.account}
+        status={wallet.status}
+        error={wallet.error}
+        connect={async () => setWalletSelectorOpen(true)}
+        disconnect={wallet.disconnect}
+        switchAccount={async () => setWalletSelectorOpen(true)}
+        switchToSepolia={wallet.switchToSepolia}
+        refresh={refreshAll}
+        refreshing={dexData.loading || positionData.loading || swapQuote.loading}
+      />
+      <main className="workspace" id="workspace" tabIndex={-1}>
         {page === "pools" && (
           <PoolsPage
+            onConnect={onConnect}
+            onConnectLabel={onConnectLabel}
             query={query}
             setQuery={setQuery}
             fee={fee}
@@ -321,6 +328,8 @@ export function App() {
         )}
         {page === "swap" && (
           <SwapPage
+            onConnect={onConnect}
+            onConnectLabel={onConnectLabel}
             swapMode={swapMode}
             setSwapMode={setSwapMode}
             swapIn={displayedSwapIn}
@@ -335,6 +344,8 @@ export function App() {
             openDrawer={openDrawer}
             isReady={isReady}
             canReview={Boolean(swapExecution)}
+            poolsLoading={dexData.loading}
+            poolsError={dexData.error}
             payBalanceLabel={formatBalanceLabel(swapInputBalance, swapInputDecimals)}
             receiveBalanceLabel={formatBalanceLabel(swapOutputBalance, swapOutputDecimals)}
             reviewDisabledReason={swapReviewDisabledReason}
@@ -342,6 +353,8 @@ export function App() {
         )}
         {page === "positions" && (
           <PositionsPage
+            onConnect={onConnect}
+            onConnectLabel={onConnectLabel}
             manualPosition={manualPosition}
             setManualPosition={setManualPosition}
             manualPositionError={manualPositionError}
@@ -369,15 +382,16 @@ export function App() {
           />
         )}
         {page === "activity" && <ActivityPage txStage={transactions.stage} hash={transactions.hash} error={transactions.error} syncError={transactions.syncError} />}
-      </section>
-      <ContextPanel
-        selectedPool={contextPool}
-        txStage={transactions.stage}
-        openDrawer={openDrawer}
-        balances={dexData.balances}
-        balancesLoading={dexData.loading}
-        isReady={isReady && Boolean(selectedDisplayPool) && page !== "swap"}
-      />
+        <ContextPanel
+          selectedPool={contextPool}
+          txStage={transactions.stage}
+          openDrawer={openDrawer}
+          balances={dexData.balances}
+          balancesLoading={dexData.loading}
+          isReady={isReady && Boolean(selectedDisplayPool) && page !== "swap"}
+        />
+        <NetworkFooter />
+      </main>
       {drawer && (
         <Drawer
           type={drawer}
@@ -411,6 +425,6 @@ export function App() {
         setBusyWalletId(undefined);
         setWalletSelectorOpen(false);
       }} />}
-    </main>
+    </div>
   );
 }
